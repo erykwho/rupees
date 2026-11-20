@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetClass {
+  FIXED_INCOME
+  BR_STOCK
+  BR_FII
+  US_STOCK
+  US_REIT
+  EMERGENCY_RESERVE
+}
+
+enum Currency {
+  BRL
+  USD
+}
+
+enum PriceMode {
+  AUTO_YAHOO
+  MANUAL
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  BALANCE_ADJUSTMENT
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String?
+  image        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  goal         AllocationGoal?
+  assets       Asset[]
+  transactions Transaction[]
+}
+
+model AllocationGoal {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fixedIncomePct    Decimal  @default(10) @db.Decimal(6, 2)
+  variableIncomePct Decimal  @default(90) @db.Decimal(6, 2)
+  brazilPct         Decimal  @default(60) @db.Decimal(6, 2)
+  usaPct            Decimal  @default(40) @db.Decimal(6, 2)
+  brStocksPct       Decimal  @default(70) @db.Decimal(6, 2)
+  brFiisPct         Decimal  @default(30) @db.Decimal(6, 2)
+  usStocksPct       Decimal  @default(70) @db.Decimal(6, 2)
+  usReitsPct        Decimal  @default(30) @db.Decimal(6, 2)
+  updatedAt         DateTime @updatedAt
+}
+
+model Asset {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker           String
+  assetClass       AssetClass
+  sector           String        @default("Outros")
+  currency         Currency      @default(BRL)
+  targetPctInClass Decimal       @default(0) @db.Decimal(6, 2)
+  priceMode        PriceMode     @default(AUTO_YAHOO)
+  manualPrice      Decimal?      @db.Decimal(18, 6)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  transactions     Transaction[]
+
+  @@unique([userId, ticker])
+  @@index([userId, assetClass])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  date        DateTime
+  type        TransactionType @default(BUY)
+  quantity    Decimal         @db.Decimal(18, 8)
+  unitPrice   Decimal         @db.Decimal(18, 6)
+  totalAmount Decimal         @db.Decimal(18, 4)
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([userId, date])
+  @@index([assetId, date])
+}
+
+model QuoteCache {
+  symbol    String   @id
+  price     Decimal  @db.Decimal(18, 6)
+  currency  String   @default("BRL")
+  updatedAt DateTime @updatedAt
+}
