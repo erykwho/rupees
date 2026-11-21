@@ -271,85 +271,10 @@ export function computePortfolioSummary(params: {
   });
 
   const classMap = new Map(classes.map((c) => [c.assetClass, c]));
-  const fiVal = classMap.get("FIXED_INCOME")?.currentValueBRL ?? 0;
-  const brStockVal = classMap.get("BR_STOCK")?.currentValueBRL ?? 0;
-  const brFiiVal = classMap.get("BR_FII")?.currentValueBRL ?? 0;
-  const usStockVal = classMap.get("US_STOCK")?.currentValueBRL ?? 0;
-  const usReitVal = classMap.get("US_REIT")?.currentValueBRL ?? 0;
-
-  const viVal = brStockVal + brFiiVal + usStockVal + usReitVal;
-  const brVal = brStockVal + brFiiVal;
-  const usVal = usStockVal + usReitVal;
-
   const pctOf = (part: number, whole: number) =>
     whole > EPSILON ? (part / whole) * 100 : 0;
 
-  const hierarchy: HierarchyRow[] = [
-    {
-      key: "FIXED_INCOME",
-      label: "Renda Fixa",
-      group: "MACRO",
-      targetPct: goal.fixedIncomePct,
-      actualPct: pctOf(fiVal, totalInvestedValueBRL),
-      diffPct: pctOf(fiVal, totalInvestedValueBRL) - goal.fixedIncomePct,
-    },
-    {
-      key: "VARIABLE_INCOME",
-      label: "Renda Variável",
-      group: "MACRO",
-      targetPct: goal.variableIncomePct,
-      actualPct: pctOf(viVal, totalInvestedValueBRL),
-      diffPct: pctOf(viVal, totalInvestedValueBRL) - goal.variableIncomePct,
-    },
-    {
-      key: "BRAZIL",
-      label: "Brasil",
-      group: "REGION",
-      targetPct: goal.brazilPct,
-      actualPct: pctOf(brVal, viVal),
-      diffPct: pctOf(brVal, viVal) - goal.brazilPct,
-    },
-    {
-      key: "USA",
-      label: "EUA",
-      group: "REGION",
-      targetPct: goal.usaPct,
-      actualPct: pctOf(usVal, viVal),
-      diffPct: pctOf(usVal, viVal) - goal.usaPct,
-    },
-    {
-      key: "BR_STOCK",
-      label: "Ações",
-      group: "BR",
-      targetPct: goal.brStocksPct,
-      actualPct: pctOf(brStockVal, brVal),
-      diffPct: pctOf(brStockVal, brVal) - goal.brStocksPct,
-    },
-    {
-      key: "BR_FII",
-      label: "FIIs",
-      group: "BR",
-      targetPct: goal.brFiisPct,
-      actualPct: pctOf(brFiiVal, brVal),
-      diffPct: pctOf(brFiiVal, brVal) - goal.brFiisPct,
-    },
-    {
-      key: "US_STOCK",
-      label: "Stocks",
-      group: "US",
-      targetPct: goal.usStocksPct,
-      actualPct: pctOf(usStockVal, usVal),
-      diffPct: pctOf(usStockVal, usVal) - goal.usStocksPct,
-    },
-    {
-      key: "US_REIT",
-      label: "REITs",
-      group: "US",
-      targetPct: goal.usReitsPct,
-      actualPct: pctOf(usReitVal, usVal),
-      diffPct: pctOf(usReitVal, usVal) - goal.usReitsPct,
-    },
-  ];
+  const hierarchy = computeHierarchyForGoal(goal, classes);
 
   // Sector aggregation per investment class
   const sectorMap = new Map<string, SectorSummary>();
@@ -556,6 +481,134 @@ export function computeContributionPlan(params: {
     usdBrl: summary.usdBrl,
     suggestions,
   };
+}
+
+export function computeHierarchyForGoal(
+  goal: GoalInput,
+  classes: ClassSummary[]
+): HierarchyRow[] {
+  const classMap = new Map(classes.map((c) => [c.assetClass, c]));
+  const fiVal = classMap.get("FIXED_INCOME")?.currentValueBRL ?? 0;
+  const brStockVal = classMap.get("BR_STOCK")?.currentValueBRL ?? 0;
+  const brFiiVal = classMap.get("BR_FII")?.currentValueBRL ?? 0;
+  const usStockVal = classMap.get("US_STOCK")?.currentValueBRL ?? 0;
+  const usReitVal = classMap.get("US_REIT")?.currentValueBRL ?? 0;
+
+  const viVal = brStockVal + brFiiVal + usStockVal + usReitVal;
+  const brVal = brStockVal + brFiiVal;
+  const usVal = usStockVal + usReitVal;
+  const totalInvestedValueBRL = fiVal + viVal;
+
+  const pctOf = (part: number, whole: number) =>
+    whole > EPSILON ? (part / whole) * 100 : 0;
+
+  return [
+    {
+      key: "FIXED_INCOME",
+      label: "Renda Fixa",
+      group: "MACRO",
+      targetPct: goal.fixedIncomePct,
+      actualPct: pctOf(fiVal, totalInvestedValueBRL),
+      diffPct: pctOf(fiVal, totalInvestedValueBRL) - goal.fixedIncomePct,
+    },
+    {
+      key: "VARIABLE_INCOME",
+      label: "Renda Variável",
+      group: "MACRO",
+      targetPct: goal.variableIncomePct,
+      actualPct: pctOf(viVal, totalInvestedValueBRL),
+      diffPct: pctOf(viVal, totalInvestedValueBRL) - goal.variableIncomePct,
+    },
+    {
+      key: "BRAZIL",
+      label: "Brasil",
+      group: "REGION",
+      targetPct: goal.brazilPct,
+      actualPct: pctOf(brVal, viVal),
+      diffPct: pctOf(brVal, viVal) - goal.brazilPct,
+    },
+    {
+      key: "USA",
+      label: "EUA",
+      group: "REGION",
+      targetPct: goal.usaPct,
+      actualPct: pctOf(usVal, viVal),
+      diffPct: pctOf(usVal, viVal) - goal.usaPct,
+    },
+    {
+      key: "BR_STOCK",
+      label: "Ações",
+      group: "BR",
+      targetPct: goal.brStocksPct,
+      actualPct: pctOf(brStockVal, brVal),
+      diffPct: pctOf(brStockVal, brVal) - goal.brStocksPct,
+    },
+    {
+      key: "BR_FII",
+      label: "FIIs",
+      group: "BR",
+      targetPct: goal.brFiisPct,
+      actualPct: pctOf(brFiiVal, brVal),
+      diffPct: pctOf(brFiiVal, brVal) - goal.brFiisPct,
+    },
+    {
+      key: "US_STOCK",
+      label: "Stocks",
+      group: "US",
+      targetPct: goal.usStocksPct,
+      actualPct: pctOf(usStockVal, usVal),
+      diffPct: pctOf(usStockVal, usVal) - goal.usStocksPct,
+    },
+    {
+      key: "US_REIT",
+      label: "REITs",
+      group: "US",
+      targetPct: goal.usReitsPct,
+      actualPct: pctOf(usReitVal, usVal),
+      diffPct: pctOf(usReitVal, usVal) - goal.usReitsPct,
+    },
+  ];
+}
+
+export function computeNextRebalanceAssets(
+  summary: PortfolioSummary,
+  limit = 3
+): AssetSummary[] {
+  const safeLimit = Math.max(0, Math.floor(limit));
+  if (safeLimit === 0) return [];
+
+  const classNeedMap = new Map<InvestmentClassKey, number>();
+  for (const c of summary.classes) {
+    classNeedMap.set(c.assetClass, c.balanceNeededBRL);
+  }
+
+  const candidates = summary.assets
+    .filter((a): a is AssetSummary & { assetClass: InvestmentClassKey } => {
+      if (a.assetClass === "EMERGENCY_RESERVE") return false;
+      if (!a.isActive) return false;
+      if (a.globalTargetPct <= 0) return false;
+      if (a.balanceNeededBRL <= EPSILON) return false;
+      return true;
+    })
+    .map((a) => ({
+      asset: a,
+      neededBRL: a.balanceNeededBRL,
+      classNeed: classNeedMap.get(a.assetClass) ?? 0,
+    }));
+
+  // Same priority rule as computeContributionPlan:
+  // under-allocated classes first, then largest class deficit, then largest asset deficit
+  candidates.sort((a, b) => {
+    const aClassDeficit = a.classNeed > 0 ? 1 : 0;
+    const bClassDeficit = b.classNeed > 0 ? 1 : 0;
+    if (aClassDeficit !== bClassDeficit) return bClassDeficit - aClassDeficit;
+    if (Math.abs(b.classNeed - a.classNeed) > 1) {
+      return b.classNeed - a.classNeed;
+    }
+    return b.neededBRL - a.neededBRL;
+  });
+
+  return candidates.slice(0, safeLimit).map((item) => item.asset);
 }
 
 function round2(n: number): number {

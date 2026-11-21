@@ -1,72 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  ArrowRight,
   ArrowUpRight,
   Compass,
   DollarSign,
   Plus,
   RefreshCw,
   Shield,
-  TrendingDown,
-  TrendingUp,
+  Target,
   Wallet,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { computeNextRebalanceAssets } from "@/lib/domain/calculations";
 import {
   ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
-  INVESTMENT_CLASSES,
-  type InvestmentClassKey,
   type PortfolioSummary,
   formatBRL,
   formatPct,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
-import { useTheme } from "@/components/theme-provider";
-import { maskBRL, maskSignedBRL } from "@/lib/privacy";
+import { maskBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
-
-const SECTOR_PALETTE = [
-  "#059669",
-  "#0284c7",
-  "#2563eb",
-  "#d97706",
-  "#0f766e",
-  "#4f46e5",
-  "#db2777",
-  "#65a30d",
-  "#0891b2",
-  "#ea580c",
-  "#64748b",
-  "#10b981",
-];
 
 interface DashboardViewProps {
   initialSummary: PortfolioSummary;
 }
 
 export function DashboardView({ initialSummary }: DashboardViewProps) {
-  const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
-  const isDark = theme === "dark";
 
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedSectorClass, setSelectedSectorClass] =
-    useState<InvestmentClassKey>("BR_STOCK");
 
   async function handleRefreshQuotes() {
     setRefreshing(true);
@@ -81,40 +48,20 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
     }
   }
 
-  const classChartData = summary.classes.map((c) => ({
-    name: c.label,
-    Objetivo: Number(c.targetPct.toFixed(1)),
-    Real: Number(c.actualPct.toFixed(1)),
-    color: ASSET_CLASS_COLORS[c.assetClass],
-  }));
+  const nextAssets = useMemo(
+    () => computeNextRebalanceAssets(summary, 3),
+    [summary]
+  );
 
-  const sectorData = summary.sectors
-    .filter(
-      (s) => s.assetClass === selectedSectorClass && s.currentValueBRL > 0
-    )
-    .map((s) => ({
-      name: s.sector,
-      value: Number(s.currentValueBRL.toFixed(2)),
-      pct: Number(s.actualPctInClass.toFixed(1)),
-    }));
+  const macroRows = useMemo(
+    () => summary.hierarchy.filter((r) => r.group === "MACRO"),
+    [summary.hierarchy]
+  );
 
-  const isPositiveReturn = summary.totalProfitLossBRL >= 0;
-
-  const tooltipContentStyle = isDark
-    ? {
-        borderRadius: "12px",
-        border: "1px solid #1e293b",
-        backgroundColor: "#0f172a",
-        color: "#f1f5f9",
-        fontSize: "12px",
-      }
-    : {
-        borderRadius: "12px",
-        border: "1px solid #e2e8f0",
-        backgroundColor: "#ffffff",
-        color: "#0f172a",
-        fontSize: "12px",
-      };
+  const regionRows = useMemo(
+    () => summary.hierarchy.filter((r) => r.group === "REGION"),
+    [summary.hierarchy]
+  );
 
   return (
     <div className="space-y-6">
@@ -165,7 +112,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
             <span>Patrimônio Investido</span>
@@ -175,45 +122,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
             {maskBRL(summary.totalInvestedValueBRL, isPrivate)}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Custo aplicado:{" "}
-            <span className="font-mono tabular-nums">
-              {maskBRL(summary.totalCostBasisBRL, isPrivate)}
-            </span>
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Resultado Estimado</span>
-            {isPositiveReturn ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-            )}
-          </div>
-          <p
-            className={cn(
-              "mt-2 font-mono text-2xl font-bold tracking-tight tabular-nums",
-              isPositiveReturn
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-rose-600 dark:text-rose-400"
-            )}
-          >
-            {maskSignedBRL(summary.totalProfitLossBRL, isPrivate)}
-          </p>
-          <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-            Rentabilidade:{" "}
-            <span
-              className={cn(
-                "font-mono font-semibold tabular-nums",
-                isPositiveReturn
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : "text-rose-600 dark:text-rose-400"
-              )}
-            >
-              {isPositiveReturn ? "+" : ""}
-              {formatPct(summary.totalProfitLossPct, 2)}
-            </span>
+            Carteira de longo prazo
           </p>
         </div>
 
@@ -249,294 +158,179 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
         </div>
       </div>
 
-      {/* Allocation Table by Class */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Alocação por Classe
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Comparação entre objetivo definido e carteira atual
-            </p>
+      {/* Next 3 Assets to Rebalance */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
+          <div className="flex items-start gap-2.5">
+            <Compass className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                Próximos ativos para balancear
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Top 3 mais distantes da meta, priorizando classes defasadas
+              </p>
+            </div>
           </div>
           <Link
-            href="/objetivos"
-            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+            href="/aporte"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
           >
-            Alterar objetivos
+            Simular no Plano de Aporte
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                <th className="px-5 py-3">Classe</th>
-                <th className="px-4 py-3 text-right">Objetivo</th>
-                <th className="px-4 py-3 text-right">Real</th>
-                <th className="px-4 py-3 text-right">Diff</th>
-                <th className="px-4 py-3 text-right">Investido</th>
-                <th className="px-5 py-3 text-right">Balancear</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {summary.classes.map((c) => {
-                const underTarget = c.balanceNeededBRL > 0;
-                return (
-                  <tr
-                    key={c.assetClass}
-                    className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
-                  >
-                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
-                      <span className="inline-flex items-center gap-2.5">
+        {nextAssets.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+            Sua carteira está alinhada com os objetivos atuais.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {nextAssets.map((asset, index) => (
+              <div
+                key={asset.id}
+                className="flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between dark:hover:bg-slate-800/40"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 font-mono text-xs font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
+                        {asset.ticker}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <span
-                          className="h-2.5 w-2.5 rounded-full"
+                          className="h-1.5 w-1.5 rounded-full"
                           style={{
-                            backgroundColor: ASSET_CLASS_COLORS[c.assetClass],
+                            backgroundColor:
+                              ASSET_CLASS_COLORS[asset.assetClass],
                           }}
                         />
-                        {c.label}
+                        {ASSET_CLASS_LABELS[asset.assetClass]}
                       </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
-                      {formatPct(c.targetPct)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {formatPct(c.actualPct)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-md px-2 py-0.5 text-xs font-semibold",
-                          c.diffPct < -0.5
-                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-                            : c.diffPct > 0.5
-                              ? "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
-                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                        )}
-                      >
-                        {c.diffPct > 0 ? "+" : ""}
-                        {formatPct(c.diffPct)}
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      Atual{" "}
+                      <span className="font-mono font-semibold text-slate-700 tabular-nums dark:text-slate-200">
+                        {formatPct(asset.actualPct)}
+                      </span>{" "}
+                      · Alvo{" "}
+                      <span className="font-mono tabular-nums">
+                        {formatPct(asset.globalTargetPct)}
                       </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-800 tabular-nums dark:text-slate-200">
-                      {maskBRL(c.currentValueBRL, isPrivate)}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-5 py-3.5 text-right font-mono font-semibold tabular-nums",
-                        underTarget
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-slate-400 dark:text-slate-500"
-                      )}
-                    >
-                      {isPrivate
-                        ? maskBRL(c.balanceNeededBRL, true)
-                        : `${underTarget ? "+" : ""}${formatBRL(c.balanceNeededBRL)}`}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pl-10 sm:pl-0 sm:text-right">
+                  <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                    Falta para a meta
+                  </p>
+                  <p className="font-mono text-base font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
+                    {maskBRL(asset.balanceNeededBRL, isPrivate)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Real vs Objetivo Bar Chart */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            Objetivo vs Real (%)
-          </h2>
-          <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-            Distribuição percentual por classe de ativos
-          </p>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={classChartData}
-                margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={isDark ? "#1e293b" : "#f1f5f9"}
-                />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 12, fill: isDark ? "#94a3b8" : "#64748b" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: isDark ? "#64748b" : "#94a3b8" }}
-                  axisLine={false}
-                  tickLine={false}
-                  unit="%"
-                />
-                <Tooltip
-                  formatter={(value) => [`${value}%`, ""]}
-                  contentStyle={tooltipContentStyle}
-                  itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
-                  labelStyle={{ color: isDark ? "#f8fafc" : "#0f172a" }}
-                  cursor={{
-                    fill: isDark
-                      ? "rgba(30, 41, 59, 0.5)"
-                      : "rgba(241, 245, 249, 0.7)",
-                  }}
-                />
-                <Bar
-                  dataKey="Objetivo"
-                  fill={isDark ? "#475569" : "#cbd5e1"}
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={28}
-                />
-                <Bar
-                  dataKey="Real"
-                  fill={isDark ? "#10b981" : "#059669"}
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={28}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-
-        {/* Sector Allocation Chart */}
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Macro Goals Summary */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2.5">
+            <Target className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Alocação por Setor
+                Objetivos Macros
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Concentração setorial dentro da classe
+                Estratégia atual configurada para sua carteira
               </p>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {INVESTMENT_CLASSES.filter((c) => c !== "FIXED_INCOME").map(
-                (cls) => (
-                  <button
-                    key={cls}
-                    type="button"
-                    onClick={() => setSelectedSectorClass(cls)}
-                    className={cn(
-                      "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
-                      selectedSectorClass === cls
-                        ? "bg-emerald-600 text-white"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    )}
-                  >
-                    {ASSET_CLASS_LABELS[cls]}
-                  </button>
-                )
-              )}
             </div>
           </div>
 
-          {sectorData.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-              Nenhum valor investido nesta classe ainda.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={sectorData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={48}
-                      outerRadius={82}
-                      paddingAngle={2}
-                      stroke={isDark ? "#0f172a" : "#ffffff"}
-                    >
-                      {sectorData.map((entry, idx) => (
-                        <Cell
-                          key={entry.name}
-                          fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => maskBRL(Number(value), isPrivate)}
-                      contentStyle={tooltipContentStyle}
-                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                {sectorData.map((s, idx) => (
-                  <div
-                    key={s.name}
-                    className="flex items-center justify-between gap-2 text-xs"
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            SECTOR_PALETTE[idx % SECTOR_PALETTE.length],
-                        }}
-                      />
-                      <span className="truncate">{s.name}</span>
+          <Link
+            href="/objetivos"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+          >
+            Quer ajustar sua estratégia? Alterar objetivos
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Level 1: Renda Fixa vs Renda Variável */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Alocação Macro
+            </p>
+            <div className="mt-3 space-y-3">
+              {macroRows.map((row) => (
+                <div key={row.key}>
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {row.label}
                     </span>
-                    <span className="shrink-0 font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {formatPct(s.pct)}
+                    <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                      <strong className="font-bold text-slate-900 dark:text-slate-100">
+                        {formatPct(row.actualPct)}
+                      </strong>{" "}
+                      <span className="text-slate-400 dark:text-slate-500">
+                        / alvo {formatPct(row.targetPct, 0)}
+                      </span>
                     </span>
                   </div>
-                ))}
-              </div>
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
+                    <div
+                      className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-        </section>
-      </div>
+          </div>
 
-      {/* Hierarchy Breakdown */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-          Hierarquia dos Objetivos
-        </h2>
-        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-          Macro (RF/RV), Geografia (Brasil/EUA) e Subclasses
-        </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {summary.hierarchy.map((row) => (
-            <div
-              key={row.key}
-              className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/50"
-            >
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                {row.label}
-              </p>
-              <div className="mt-1.5 flex items-baseline justify-between">
-                <span className="font-mono text-lg font-bold text-slate-900 tabular-nums dark:text-slate-100">
-                  {formatPct(row.actualPct)}
-                </span>
-                <span className="font-mono text-xs text-slate-400 tabular-nums dark:text-slate-500">
-                  alvo {formatPct(row.targetPct, 0)}
-                </span>
-              </div>
-              <p
-                className={cn(
-                  "mt-1 font-mono text-xs font-semibold tabular-nums",
-                  row.diffPct < -1
-                    ? "text-amber-600 dark:text-amber-400"
-                    : row.diffPct > 1
-                      ? "text-sky-600 dark:text-sky-400"
-                      : "text-emerald-600 dark:text-emerald-400"
-                )}
-              >
-                {row.diffPct > 0 ? "+" : ""}
-                {formatPct(row.diffPct)}
-              </p>
+          {/* Level 2: Brasil vs EUA (dentro de RV) */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Geografia (dentro de Renda Variável)
+            </p>
+            <div className="mt-3 space-y-3">
+              {regionRows.map((row) => (
+                <div key={row.key}>
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">
+                      {row.label}
+                    </span>
+                    <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                      <strong className="font-bold text-slate-900 dark:text-slate-100">
+                        {formatPct(row.actualPct)}
+                      </strong>{" "}
+                      <span className="text-slate-400 dark:text-slate-500">
+                        / alvo {formatPct(row.targetPct, 0)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
+                    <div
+                      className="h-full rounded-full bg-sky-600 transition-all dark:bg-sky-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </section>
     </div>

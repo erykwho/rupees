@@ -3,6 +3,8 @@ import {
   computeAssetPosition,
   computeContributionPlan,
   computeDerivedClassTargets,
+  computeHierarchyForGoal,
+  computeNextRebalanceAssets,
   computePortfolioSummary,
 } from "./calculations";
 import type { AssetInput, GoalInput, TransactionInput } from "./types";
@@ -126,5 +128,55 @@ describe("computePortfolioSummary & computeContributionPlan", () => {
         expect(Number.isInteger(s.suggestedQty)).toBe(true);
       }
     }
+  });
+
+  it("prioritizes top 3 rebalance assets by class deficit first, then asset deficit, excluding emergency reserve", () => {
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      quotes,
+      usdBrl: 5,
+    });
+
+    // Total invested = 6000
+    // Targets: FI=600 (actual 1000, diff -400), BR_STOCK=2268 (actual 2000, need +268),
+    // BR_FII=972 (actual 0, need +972), US_STOCK=1512 (actual 3000, diff -1488), US_REIT=648 (actual 0, need +648)
+    // Priority order should be: KNRI11 (BR_FII, +972), VNQ (US_REIT, +648), WEGE3 (BR_STOCK, +268)
+    const nextAssets = computeNextRebalanceAssets(summary, 3);
+    expect(nextAssets.map((a) => a.ticker)).toEqual(["KNRI11", "VNQ", "WEGE3"]);
+    expect(nextAssets.every((a) => a.assetClass !== "EMERGENCY_RESERVE")).toBe(true);
+  });
+
+  it("recomputes hierarchy live when goal percentages change", () => {
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      quotes,
+      usdBrl: 5,
+    });
+
+    const updatedGoal: GoalInput = {
+      ...DEFAULT_GOAL,
+      fixedIncomePct: 30,
+      variableIncomePct: 70,
+      brazilPct: 50,
+      usaPct: 50,
+    };
+
+    const liveHierarchy = computeHierarchyForGoal(updatedGoal, summary.classes);
+    const fiRow = liveHierarchy.find((r) => r.key === "FIXED_INCOME");
+    const brRow = liveHierarchy.find((r) => r.key === "BRAZIL");
+
+    expect(fiRow?.targetPct).toBe(30);
+    // actual FI = 1000 / 6000 = 16.67%
+    expect(fiRow?.actualPct).toBeCloseTo(16.67, 1);
+    expect(fiRow?.diffPct).toBeCloseTo(16.67 - 30, 1);
+
+    expect(brRow?.targetPct).toBe(50);
+    // actual BR inside RV = 2000 / 5000 = 40%
+    expect(brRow?.actualPct).toBeCloseTo(40, 1);
+    expect(brRow?.diffPct).toBeCloseTo(-10, 1);
   });
 });

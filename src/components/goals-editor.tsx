@@ -2,7 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { CheckCircle2, Save } from "lucide-react";
-import { computeDerivedClassTargets } from "@/lib/domain/calculations";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  computeDerivedClassTargets,
+  computeHierarchyForGoal,
+} from "@/lib/domain/calculations";
 import {
   ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
@@ -11,6 +23,8 @@ import {
   type PortfolioSummary,
   formatPct,
 } from "@/lib/domain/types";
+import { useTheme } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
 
 interface GoalsEditorProps {
   initialGoal: GoalInput;
@@ -62,6 +76,9 @@ const PAIRS: PairConfig[] = [
 ];
 
 export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const [goal, setGoal] = useState<GoalInput>(initialGoal);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -72,6 +89,38 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
     () => new Map(summary.classes.map((c) => [c.assetClass, c.actualPct])),
     [summary.classes]
   );
+
+  const classChartData = useMemo(
+    () =>
+      INVESTMENT_CLASSES.map((cls) => ({
+        name: ASSET_CLASS_LABELS[cls],
+        Objetivo: Number(derived[cls].toFixed(1)),
+        Real: Number((actualByClass.get(cls) ?? 0).toFixed(1)),
+        color: ASSET_CLASS_COLORS[cls],
+      })),
+    [derived, actualByClass]
+  );
+
+  const liveHierarchy = useMemo(
+    () => computeHierarchyForGoal(goal, summary.classes),
+    [goal, summary.classes]
+  );
+
+  const tooltipContentStyle = isDark
+    ? {
+        borderRadius: "12px",
+        border: "1px solid #1e293b",
+        backgroundColor: "#0f172a",
+        color: "#f1f5f9",
+        fontSize: "12px",
+      }
+    : {
+        borderRadius: "12px",
+        border: "1px solid #e2e8f0",
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+        fontSize: "12px",
+      };
 
   function updatePair(
     leftKey: keyof GoalInput,
@@ -277,6 +326,108 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Real vs Objetivo Bar Chart */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+          Objetivo vs Real (%)
+        </h2>
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+          Distribuição percentual por classe de ativos (atualiza em tempo real
+          com os ajustes)
+        </p>
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={classChartData}
+              margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke={isDark ? "#1e293b" : "#f1f5f9"}
+              />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 12, fill: isDark ? "#94a3b8" : "#64748b" }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 11, fill: isDark ? "#64748b" : "#94a3b8" }}
+                axisLine={false}
+                tickLine={false}
+                unit="%"
+              />
+              <Tooltip
+                formatter={(value) => [`${value}%`, ""]}
+                contentStyle={tooltipContentStyle}
+                itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                labelStyle={{ color: isDark ? "#f8fafc" : "#0f172a" }}
+                cursor={{
+                  fill: isDark
+                    ? "rgba(30, 41, 59, 0.5)"
+                    : "rgba(241, 245, 249, 0.7)",
+                }}
+              />
+              <Bar
+                dataKey="Objetivo"
+                fill={isDark ? "#475569" : "#cbd5e1"}
+                radius={[6, 6, 0, 0]}
+                maxBarSize={28}
+              />
+              <Bar
+                dataKey="Real"
+                fill={isDark ? "#10b981" : "#059669"}
+                radius={[6, 6, 0, 0]}
+                maxBarSize={28}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Hierarchy Breakdown */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+          Hierarquia dos Objetivos
+        </h2>
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+          Macro (RF/RV), Geografia (Brasil/EUA) e Subclasses
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {liveHierarchy.map((row) => (
+            <div
+              key={row.key}
+              className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/50"
+            >
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {row.label}
+              </p>
+              <div className="mt-1.5 flex items-baseline justify-between">
+                <span className="font-mono text-lg font-bold text-slate-900 tabular-nums dark:text-slate-100">
+                  {formatPct(row.actualPct)}
+                </span>
+                <span className="font-mono text-xs text-slate-400 tabular-nums dark:text-slate-500">
+                  alvo {formatPct(row.targetPct, 0)}
+                </span>
+              </div>
+              <p
+                className={cn(
+                  "mt-1 font-mono text-xs font-semibold tabular-nums",
+                  row.diffPct < -1
+                    ? "text-amber-600 dark:text-amber-400"
+                    : row.diffPct > 1
+                      ? "text-sky-600 dark:text-sky-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                )}
+              >
+                {row.diffPct > 0 ? "+" : ""}
+                {formatPct(row.diffPct)}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
     </div>
