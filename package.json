@@ -11,7 +11,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:import": "tsx prisma/import-sheets.ts"
+    "db:import": "tsx prisma/import-sheets.ts",
+    "db:fix-event-dates": "tsx prisma/fix-event-dates.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
