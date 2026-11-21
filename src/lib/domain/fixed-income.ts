@@ -23,6 +23,13 @@ export interface BenchmarkRates {
   source: "bcb" | "cache" | "fallback";
 }
 
+export interface HistoricalBenchmarkRates {
+  selicAnnualPct: Record<string, number>; // "YYYY-MM-DD" -> % a.a.
+  cdiAnnualPct: Record<string, number>; // "YYYY-MM-DD" -> % a.a.
+  ipcaMonthlyPct: Record<string, number>; // "YYYY-MM" -> % mensal
+  fallback: Pick<BenchmarkRates, "selic" | "cdi" | "ipca">;
+}
+
 export interface FixedIncomeAssetInput {
   id: string;
   ticker: string;

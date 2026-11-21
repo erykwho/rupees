@@ -64,6 +64,7 @@ Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B
     - Sempre executar scripts de escrita primeiro em modo `--dry-run`, apresentar o resumo ao usuário, aplicar (`--apply`) somente após confirmação e re-validar a idempotência em seguida.
     - Ao concluir a tarefa, lembrar o usuário de revogar/rotacionar a Neon API Key temporária enviando novamente o link do Neon Console (`https://console.neon.tech` → organização → **Settings > API keys**, ou `https://console.neon.tech/app/settings/api-keys` para chave pessoal).
 - **Autor de commits Git (obrigatório para Vercel Hobby):** antes de criar qualquer commit, garantir `git config user.name "Eryk Humberto Oliveira Alves"` e `git config user.email "erykwho@gmail.com"` para que o Vercel não bloqueie o deploy por colaborador não autorizado em repositório privado.
+- **Fluxo de Pull Request (PR):** para mudanças importantes (novas funcionalidades, alterações de regra de negócio, refatorações relevantes ou mudanças de UI), sempre trabalhar em uma branch dedicada e abrir um **Pull Request** contra `master` via `gh pr create` (validando `pnpm test`, `pnpm lint` e `pnpm build` antes), em vez de fazer push direto em `master`.
 - Idioma da interface e comunicação com o usuário: **Português (pt-BR)**.
 - **Roadmap V2 planejado:** Relatório anual de Imposto de Renda (aba `Informe` da planilha), controle de dividendos/proventos e gráfico histórico de evolução patrimonial.
 

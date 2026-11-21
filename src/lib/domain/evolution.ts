@@ -5,10 +5,17 @@ import {
   INVESTMENT_CLASSES,
   type TransactionInput,
   getYahooSymbol,
+  isFixedIncomeClass,
 } from "./types";
 import type { QuoteMapEntry } from "./calculations";
+import {
+  type HistoricalBenchmarkRates,
+  computeAnnualGrossRatePct,
+  getRegressiveIrRate,
+} from "./fixed-income";
 
 const EPSILON = 1e-8;
+const DAYS_PER_YEAR = 365;
 const USD_BRL_SYMBOL = "USDBRL=X";
 
 export type EvolutionRange =
@@ -42,6 +49,7 @@ export interface EvolutionData {
   lastDate: string | null;
   usdBrl: number;
   usdBrlUpdatedAt: string | null;
+  hasEstimatedFixedIncome?: boolean;
 }
 
 export interface AggregatedEvolutionPoint {
@@ -178,18 +186,66 @@ function createEmptyByClass(): Record<AssetClassKey, ClassDayMetrics> {
 
 function findLatestPriceOnOrBefore(
   series: Record<string, number> | undefined,
-  targetDate: string
+  targetDate: string,
+  allowZero = false
 ): number | null {
   if (!series) return null;
   let bestDate = "";
   let bestPrice: number | null = null;
   for (const [date, price] of Object.entries(series)) {
-    if (date <= targetDate && price > 0 && date > bestDate) {
+    const valid = allowZero
+      ? Number.isFinite(price) && price >= 0
+      : Number.isFinite(price) && price > 0;
+    if (date <= targetDate && valid && date > bestDate) {
       bestDate = date;
       bestPrice = price;
     }
   }
   return bestPrice;
+}
+
+function diffDaysISO(fromISO: string, toISO: string): number {
+  const [y1, m1, d1] = fromISO.split("-").map(Number);
+  const [y2, m2, d2] = toISO.split("-").map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((t2 - t1) / (24 * 60 * 60 * 1000));
+}
+
+function daysInMonthISO(isoDate: string): number {
+  const [y, m] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function computeDailyFactorFromAnnualPct(annualPct: number): number {
+  const base = 1 + annualPct / 100;
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  return Math.pow(base, 1 / DAYS_PER_YEAR);
+}
+
+interface FixedIncomeLot {
+  buyDate: string;
+  realQty: number;
+  baseValueBRL: number;
+  accruedGrossGainBRL: number;
+  contractedRate: number | null;
+}
+
+function computeLotNetValueBRL(
+  lot: FixedIncomeLot,
+  date: string,
+  maturityDateISO: string | null,
+  taxExempt: boolean
+): number {
+  const effectiveDate =
+    maturityDateISO && date > maturityDateISO ? maturityDateISO : date;
+  const holdingDays = Math.max(0, diffDaysISO(lot.buyDate, effectiveDate));
+  const irRate = getRegressiveIrRate(holdingDays, taxExempt);
+  const netGain =
+    lot.accruedGrossGainBRL > 0
+      ? lot.accruedGrossGainBRL * (1 - irRate)
+      : lot.accruedGrossGainBRL;
+  return Math.max(0, lot.baseValueBRL + netGain);
 }
 
 export function computePortfolioEvolution(params: {
@@ -200,6 +256,7 @@ export function computePortfolioEvolution(params: {
   currentUsdBrl: number;
   currentUsdBrlUpdatedAt?: string | null;
   todayISO?: string;
+  fixedIncomeRates?: HistoricalBenchmarkRates;
 }): EvolutionData {
   const {
     assets,
@@ -209,6 +266,7 @@ export function computePortfolioEvolution(params: {
     currentUsdBrl,
     currentUsdBrlUpdatedAt = null,
     todayISO = toISODate(new Date()),
+    fixedIncomeRates,
   } = params;
 
   if (transactions.length === 0 || assets.length === 0) {
@@ -218,6 +276,7 @@ export function computePortfolioEvolution(params: {
       lastDate: null,
       usdBrl: currentUsdBrl,
       usdBrlUpdatedAt: currentUsdBrlUpdatedAt,
+      hasEstimatedFixedIncome: false,
     };
   }
 
@@ -249,6 +308,7 @@ export function computePortfolioEvolution(params: {
       lastDate: null,
       usdBrl: currentUsdBrl,
       usdBrlUpdatedAt: currentUsdBrlUpdatedAt,
+      hasEstimatedFixedIncome: false,
     };
   }
 
@@ -258,11 +318,42 @@ export function computePortfolioEvolution(params: {
 
   // Group transactions by ISO date
   const txByDate = new Map<string, TransactionInput[]>();
+  const assetsWithLotRate = new Set<string>();
   for (const tx of sortedTx) {
     const d = toISODate(tx.date);
     const list = txByDate.get(d);
     if (list) list.push(tx);
     else txByDate.set(d, [tx]);
+
+    if (
+      tx.type === "BUY" &&
+      tx.fixedIncomeRate !== undefined &&
+      tx.fixedIncomeRate !== null &&
+      Number.isFinite(tx.fixedIncomeRate)
+    ) {
+      assetsWithLotRate.add(tx.assetId);
+    }
+  }
+
+  // Determine which assets use daily fixed-income net-of-IR estimation
+  const estimatedFiAssetIds = new Set<string>();
+  const assetMaturityISO = new Map<string, string | null>();
+  if (fixedIncomeRates) {
+    for (const asset of assets) {
+      if (!isFixedIncomeClass(asset.assetClass)) continue;
+      if (!asset.fixedIncomeIndex) continue;
+      const hasDefaultRate =
+        asset.fixedIncomeRate !== undefined &&
+        asset.fixedIncomeRate !== null &&
+        Number.isFinite(asset.fixedIncomeRate);
+      if (!hasDefaultRate && !assetsWithLotRate.has(asset.id)) continue;
+
+      estimatedFiAssetIds.add(asset.id);
+      assetMaturityISO.set(
+        asset.id,
+        asset.maturityDate ? toISODate(asset.maturityDate) : null
+      );
+    }
   }
 
   // Seed carry-forward prices from dates strictly before firstDate
@@ -279,15 +370,93 @@ export function computePortfolioEvolution(params: {
   let lastKnownUsdBrl =
     findLatestPriceOnOrBefore(usdSeries, firstDate) ?? currentUsdBrl;
 
+  // Seed carry-forward historical BCB rates
+  let lastKnownSelic = fixedIncomeRates
+    ? (findLatestPriceOnOrBefore(
+        fixedIncomeRates.selicAnnualPct,
+        firstDate,
+        true
+      ) ?? fixedIncomeRates.fallback.selic)
+    : 0;
+  let lastKnownCdi = fixedIncomeRates
+    ? (findLatestPriceOnOrBefore(
+        fixedIncomeRates.cdiAnnualPct,
+        firstDate,
+        true
+      ) ?? fixedIncomeRates.fallback.cdi)
+    : 0;
+
   // Running state per asset
   const stateByAsset = new Map<string, { quantity: number; avgPrice: number }>();
+  const fiLotsByAsset = new Map<string, FixedIncomeLot[]>();
   for (const asset of assets) {
     stateByAsset.set(asset.id, { quantity: 0, avgPrice: 0 });
+    if (estimatedFiAssetIds.has(asset.id)) {
+      fiLotsByAsset.set(asset.id, []);
+    }
   }
 
   const points: EvolutionDayPoint[] = [];
+  let hasEstimatedFixedIncome = false;
 
   for (let date = firstDate; date <= endDate; date = addDaysISO(date, 1)) {
+    // 0. Update BCB benchmark rates and accrue 1 calendar day on existing fixed-income lots
+    if (fixedIncomeRates && estimatedFiAssetIds.size > 0) {
+      const selicOnDay = fixedIncomeRates.selicAnnualPct[date];
+      if (typeof selicOnDay === "number" && Number.isFinite(selicOnDay) && selicOnDay >= 0) {
+        lastKnownSelic = selicOnDay;
+      }
+      const cdiOnDay = fixedIncomeRates.cdiAnnualPct[date];
+      if (typeof cdiOnDay === "number" && Number.isFinite(cdiOnDay) && cdiOnDay >= 0) {
+        lastKnownCdi = cdiOnDay;
+      }
+
+      const ym = date.slice(0, 7);
+      const monthlyIpca = fixedIncomeRates.ipcaMonthlyPct[ym];
+      const dayIpcaAnnual =
+        typeof monthlyIpca === "number" && Number.isFinite(monthlyIpca)
+          ? (Math.pow(
+              1 + Math.max(0, monthlyIpca) / 100,
+              DAYS_PER_YEAR / daysInMonthISO(date)
+            ) -
+              1) *
+            100
+          : fixedIncomeRates.fallback.ipca;
+
+      const dayBenchmarks = {
+        selic: lastKnownSelic,
+        cdi: lastKnownCdi,
+        ipca: dayIpcaAnnual,
+      };
+
+      for (const assetId of estimatedFiAssetIds) {
+        const lots = fiLotsByAsset.get(assetId);
+        if (!lots || lots.length === 0) continue;
+
+        const maturityISO = assetMaturityISO.get(assetId) ?? null;
+        if (maturityISO && date > maturityISO) continue;
+
+        const asset = assetById.get(assetId)!;
+        const index = asset.fixedIncomeIndex!;
+
+        for (const lot of lots) {
+          if (lot.contractedRate === null || !Number.isFinite(lot.contractedRate)) {
+            continue;
+          }
+          const annualGrossRatePct = computeAnnualGrossRatePct(
+            index,
+            lot.contractedRate,
+            dayBenchmarks
+          );
+          const dailyFactor = computeDailyFactorFromAnnualPct(annualGrossRatePct);
+          const currentGross = lot.baseValueBRL + lot.accruedGrossGainBRL;
+          if (currentGross > EPSILON && dailyFactor > 0) {
+            lot.accruedGrossGainBRL += currentGross * (dailyFactor - 1);
+          }
+        }
+      }
+    }
+
     // 1. Update FX rate for this date
     if (date === todayISO && currentUsdBrl > 0) {
       lastKnownUsdBrl = currentUsdBrl;
@@ -331,6 +500,7 @@ export function computePortfolioEvolution(params: {
       const qty = Math.abs(tx.quantity);
       const total = Math.abs(tx.totalAmount);
       const fxRate = asset.currency === "USD" ? usdBrl : 1;
+      const fiLots = fiLotsByAsset.get(asset.id);
 
       if (tx.type === "BUY") {
         const nextQty = st.quantity + qty;
@@ -339,6 +509,28 @@ export function computePortfolioEvolution(params: {
         }
         st.quantity = nextQty;
         dayContribByClass[asset.assetClass] += total * fxRate;
+
+        if (fiLots) {
+          const manualPrice = asset.manualPrice ?? 1;
+          const initialVal = total > EPSILON ? total : qty * manualPrice;
+          const lotRate =
+            tx.fixedIncomeRate !== undefined &&
+            tx.fixedIncomeRate !== null &&
+            Number.isFinite(tx.fixedIncomeRate)
+              ? tx.fixedIncomeRate
+              : asset.fixedIncomeRate !== undefined &&
+                  asset.fixedIncomeRate !== null &&
+                  Number.isFinite(asset.fixedIncomeRate)
+                ? asset.fixedIncomeRate
+                : null;
+          fiLots.push({
+            buyDate: date,
+            realQty: qty,
+            baseValueBRL: initialVal,
+            accruedGrossGainBRL: 0,
+            contractedRate: lotRate,
+          });
+        }
       } else if (tx.type === "SELL") {
         st.quantity = Math.max(0, st.quantity - qty);
         if (st.quantity <= EPSILON) {
@@ -346,6 +538,27 @@ export function computePortfolioEvolution(params: {
           st.avgPrice = 0;
         }
         dayContribByClass[asset.assetClass] -= total * fxRate;
+
+        if (fiLots) {
+          if (st.quantity <= EPSILON) {
+            fiLots.length = 0;
+          } else {
+            let remainingToSell = qty;
+            while (remainingToSell > EPSILON && fiLots.length > 0) {
+              const lot = fiLots[0];
+              if (lot.realQty <= remainingToSell + EPSILON) {
+                remainingToSell -= lot.realQty;
+                fiLots.shift();
+              } else {
+                const keepRatio = (lot.realQty - remainingToSell) / lot.realQty;
+                lot.realQty -= remainingToSell;
+                lot.baseValueBRL *= keepRatio;
+                lot.accruedGrossGainBRL *= keepRatio;
+                remainingToSell = 0;
+              }
+            }
+          }
+        }
       } else if (tx.type === "BALANCE_ADJUSTMENT") {
         // Yield/balance update for Fixed Income / Reserve: does NOT count as contribution
         // and preserves cost basis so yield appears in profit/loss.
@@ -361,6 +574,49 @@ export function computePortfolioEvolution(params: {
             st.avgPrice = prevCost / nextQty;
           }
           st.quantity = nextQty;
+        }
+
+        // Anchor estimated lots to the real balance reported by BALANCE_ADJUSTMENT
+        if (fiLots) {
+          const manualPrice = asset.manualPrice ?? 1;
+          const anchoredBalanceBRL = st.quantity * manualPrice;
+          if (st.quantity <= EPSILON || anchoredBalanceBRL <= EPSILON) {
+            fiLots.length = 0;
+          } else if (fiLots.length === 0) {
+            fiLots.push({
+              buyDate: date,
+              realQty: st.quantity,
+              baseValueBRL: anchoredBalanceBRL,
+              accruedGrossGainBRL: 0,
+              contractedRate:
+                asset.fixedIncomeRate !== undefined &&
+                asset.fixedIncomeRate !== null &&
+                Number.isFinite(asset.fixedIncomeRate)
+                  ? asset.fixedIncomeRate
+                  : null,
+            });
+          } else {
+            const maturityISO = assetMaturityISO.get(asset.id) ?? null;
+            const taxExempt = Boolean(asset.taxExempt);
+            const lotNetValues = fiLots.map((lot) =>
+              computeLotNetValueBRL(lot, date, maturityISO, taxExempt)
+            );
+            const totalNet = lotNetValues.reduce((s, v) => s + v, 0);
+            const totalRealQty = fiLots.reduce((s, lot) => s + lot.realQty, 0);
+
+            for (let i = 0; i < fiLots.length; i++) {
+              const lot = fiLots[i];
+              const weight =
+                totalNet > EPSILON
+                  ? lotNetValues[i] / totalNet
+                  : totalRealQty > EPSILON
+                    ? lot.realQty / totalRealQty
+                    : 1 / fiLots.length;
+              lot.baseValueBRL = anchoredBalanceBRL * weight;
+              lot.realQty = st.quantity * weight;
+              lot.accruedGrossGainBRL = 0;
+            }
+          }
         }
       }
     }
@@ -385,6 +641,28 @@ export function computePortfolioEvolution(params: {
       const st = stateByAsset.get(asset.id);
       if (!st || st.quantity <= EPSILON) continue;
 
+      const fxRate = asset.currency === "USD" ? usdBrl : 1;
+      const fiLots = fiLotsByAsset.get(asset.id);
+
+      if (fiLots && fiLots.length > 0) {
+        const maturityISO = assetMaturityISO.get(asset.id) ?? null;
+        const taxExempt = Boolean(asset.taxExempt);
+        let estimatedNetValueBRL = 0;
+        for (const lot of fiLots) {
+          estimatedNetValueBRL += computeLotNetValueBRL(
+            lot,
+            date,
+            maturityISO,
+            taxExempt
+          );
+        }
+        byClass[asset.assetClass].marketValueBRL += estimatedNetValueBRL;
+        byClass[asset.assetClass].investedCostBRL +=
+          st.quantity * st.avgPrice * fxRate;
+        hasEstimatedFixedIncome = true;
+        continue;
+      }
+
       const sym = assetSymbols.get(asset.id);
       let priceNative = 1;
 
@@ -402,7 +680,6 @@ export function computePortfolioEvolution(params: {
         priceNative = 0;
       }
 
-      const fxRate = asset.currency === "USD" ? usdBrl : 1;
       byClass[asset.assetClass].marketValueBRL += st.quantity * priceNative * fxRate;
       byClass[asset.assetClass].investedCostBRL += st.quantity * st.avgPrice * fxRate;
     }
@@ -425,6 +702,7 @@ export function computePortfolioEvolution(params: {
     lastDate: endDate,
     usdBrl: currentUsdBrl,
     usdBrlUpdatedAt: currentUsdBrlUpdatedAt,
+    hasEstimatedFixedIncome,
   };
 }
 
