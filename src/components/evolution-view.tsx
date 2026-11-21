@@ -53,8 +53,16 @@ import { CompactKpiStrip } from "@/components/compact-kpi-strip";
 import { FixedIncomeProjectionView } from "@/components/fixed-income-projection-view";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
+import {
+  ZoomableChartContainer,
+  useChartZoom,
+} from "@/components/zoomable-chart";
 import { MASKED_COMPACT, maskBRL, maskSignedBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
+
+const getEvolutionRangeLabel = (pt: AggregatedEvolutionPoint) => pt.tooltipLabel;
+const getContributionRangeLabel = (pt: AggregatedContributionPoint) =>
+  pt.tooltipLabel;
 
 const RANGE_OPTIONS: Array<{ value: EvolutionRange; label: string }> = [
   { value: "1M", label: "1M" },
@@ -383,6 +391,25 @@ export function EvolutionView({
 
   const { kpis, evolutionSeries, contributionSeries, activeClasses } =
     aggregated;
+
+  const evolutionResetKey = `${range}|${granularity}|${includeReserve}|${selectedClasses.join(",")}`;
+  const contributionResetKey = `${range}|${contributionGrouping}|${includeReserve}|${selectedClasses.join(",")}`;
+
+  const evolutionZoom = useChartZoom(evolutionSeries, {
+    resetKey: evolutionResetKey,
+    minVisiblePoints: granularity === "DAILY" ? 5 : 3,
+    plotLeftInset: 72,
+    plotRightInset: 12,
+    getRangeLabel: getEvolutionRangeLabel,
+  });
+
+  const contributionZoom = useChartZoom(contributionSeries, {
+    resetKey: contributionResetKey,
+    minVisiblePoints: 3,
+    plotLeftInset: 72,
+    plotRightInset: 12,
+    getRangeLabel: getContributionRangeLabel,
+  });
 
   const showsEstimatedFixedIncome =
     Boolean(data.hasEstimatedFixedIncome) &&
@@ -771,10 +798,17 @@ export function EvolutionView({
               </div>
             ) : (
               <>
-                <div className="h-80 w-full">
+                <ZoomableChartContainer
+                  containerRef={evolutionZoom.containerRef}
+                  isZoomed={evolutionZoom.isZoomed}
+                  isInteracting={evolutionZoom.isInteracting}
+                  rangeLabel={evolutionZoom.rangeLabel}
+                  onResetZoom={evolutionZoom.resetZoom}
+                  className="h-80"
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
-                      data={evolutionSeries}
+                      data={evolutionZoom.visibleData}
                       margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
                     >
                       <defs>
@@ -847,6 +881,9 @@ export function EvolutionView({
                         minTickGap={28}
                       />
                       <YAxis
+                        domain={
+                          evolutionZoom.isZoomed ? ["auto", "auto"] : undefined
+                        }
                         tick={{ fontSize: 11, fill: axisTickFill }}
                         tickLine={false}
                         axisLine={false}
@@ -860,6 +897,11 @@ export function EvolutionView({
                         }
                       />
                       <Tooltip
+                        wrapperStyle={
+                          evolutionZoom.isInteracting
+                            ? { display: "none" }
+                            : undefined
+                        }
                         content={
                           <EvolutionTooltip
                             splitByClass={splitByClass && activeClasses.length > 1}
@@ -896,6 +938,10 @@ export function EvolutionView({
                               strokeWidth={2}
                               fill="none"
                               dot={false}
+                              isAnimationActive={
+                                !evolutionZoom.isInteracting &&
+                                !evolutionZoom.isZoomed
+                              }
                               activeDot={{
                                 r: 4,
                                 strokeWidth: 0,
@@ -916,6 +962,10 @@ export function EvolutionView({
                                 strokeWidth={2.2}
                                 fill="url(#evoEmeraldGrad)"
                                 dot={false}
+                                isAnimationActive={
+                                  !evolutionZoom.isInteracting &&
+                                  !evolutionZoom.isZoomed
+                                }
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
@@ -931,6 +981,10 @@ export function EvolutionView({
                                 strokeDasharray="5 4"
                                 fill="none"
                                 dot={false}
+                                isAnimationActive={
+                                  !evolutionZoom.isInteracting &&
+                                  !evolutionZoom.isZoomed
+                                }
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
@@ -963,6 +1017,10 @@ export function EvolutionView({
                                     : "url(#evoRoseGrad)"
                                 }
                                 dot={false}
+                                isAnimationActive={
+                                  !evolutionZoom.isInteracting &&
+                                  !evolutionZoom.isZoomed
+                                }
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
@@ -990,6 +1048,10 @@ export function EvolutionView({
                                 strokeWidth={2.2}
                                 fill="url(#evoBlueGrad)"
                                 dot={false}
+                                isAnimationActive={
+                                  !evolutionZoom.isInteracting &&
+                                  !evolutionZoom.isZoomed
+                                }
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
@@ -1002,7 +1064,7 @@ export function EvolutionView({
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
-                </div>
+                </ZoomableChartContainer>
 
                 {splitByClass && activeClasses.length > 1 ? (
                   <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600 dark:text-slate-400">
@@ -1086,10 +1148,17 @@ export function EvolutionView({
               </div>
             ) : (
               <>
-                <div className="h-72 w-full">
+                <ZoomableChartContainer
+                  containerRef={contributionZoom.containerRef}
+                  isZoomed={contributionZoom.isZoomed}
+                  isInteracting={contributionZoom.isInteracting}
+                  rangeLabel={contributionZoom.rangeLabel}
+                  onResetZoom={contributionZoom.resetZoom}
+                  className="h-72"
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={contributionSeries}
+                      data={contributionZoom.visibleData}
                       margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
                       stackOffset="sign"
                     >
@@ -1116,6 +1185,11 @@ export function EvolutionView({
                       />
                       <ReferenceLine y={0} stroke={refLineStroke} />
                       <Tooltip
+                        wrapperStyle={
+                          contributionZoom.isInteracting
+                            ? { display: "none" }
+                            : undefined
+                        }
                         content={
                           <ContributionTooltip
                             activeClasses={activeClasses}
@@ -1131,11 +1205,15 @@ export function EvolutionView({
                           stackId="aportes"
                           fill={ASSET_CLASS_COLORS[cls]}
                           maxBarSize={42}
+                          isAnimationActive={
+                            !contributionZoom.isInteracting &&
+                            !contributionZoom.isZoomed
+                          }
                         />
                       ))}
                     </BarChart>
                   </ResponsiveContainer>
-                </div>
+                </ZoomableChartContainer>
 
                 {/* Legend */}
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600 dark:text-slate-400">

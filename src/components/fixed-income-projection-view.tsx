@@ -44,8 +44,15 @@ import {
 import type { FixedIncomeInitialData } from "@/lib/fixed-income-loader";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
+import {
+  ZoomableChartContainer,
+  useChartZoom,
+} from "@/components/zoomable-chart";
 import { MASKED_COMPACT, maskBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
+
+const getProjectionRangeLabel = (pt: FixedIncomeProjectionPoint) =>
+  pt.tooltipLabel;
 
 const HORIZON_OPTIONS: Array<{ value: FixedIncomeHorizonKey; label: string }> = [
   { value: "1A", label: "1A" },
@@ -260,6 +267,14 @@ export function FixedIncomeProjectionView({
       }),
     [data.assets, simulatedBenchmarks, horizon, scope, monthlyContributionBRL]
   );
+
+  const projectionZoom = useChartZoom(projection.series, {
+    resetKey: `${horizon}|${scope}`,
+    minVisiblePoints: 3,
+    plotLeftInset: 68,
+    plotRightInset: 8,
+    getRangeLabel: getProjectionRangeLabel,
+  });
 
   const fixedIncomeAssets = useMemo(
     () =>
@@ -653,71 +668,99 @@ export function FixedIncomeProjectionView({
           </div>
         </div>
 
-        <div className="mt-4 h-[280px] w-full sm:h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={projection.series}
-              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="fiGrossGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ec4899" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#ec4899" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="fiNetGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke={chartGridColor}
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: chartTickColor }}
-                tickLine={false}
-                axisLine={false}
-                minTickGap={28}
-              />
-              <YAxis
-                tickFormatter={(v: number) =>
-                  isPrivate ? MASKED_COMPACT : formatCompactBRL(v)
-                }
-                tick={{ fontSize: 11, fill: chartTickColor }}
-                tickLine={false}
-                axisLine={false}
-                width={68}
-              />
-              <Tooltip content={<ProjectionTooltip isPrivate={isPrivate} />} />
-              <Area
-                type="monotone"
-                dataKey="grossValueBRL"
-                name="Bruto"
-                stroke="#ec4899"
-                strokeWidth={1.75}
-                strokeDasharray="4 4"
-                fill="url(#fiGrossGrad)"
-              />
-              <Area
-                type="monotone"
-                dataKey="netValueBRL"
-                name="Líquido"
-                stroke="#10b981"
-                strokeWidth={2.25}
-                fill="url(#fiNetGrad)"
-              />
-              <Area
-                type="monotone"
-                dataKey="principalBRL"
-                name="Capital base"
-                stroke="#94a3b8"
-                strokeWidth={1.5}
-                fill="none"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="mt-4">
+          <ZoomableChartContainer
+            containerRef={projectionZoom.containerRef}
+            isZoomed={projectionZoom.isZoomed}
+            isInteracting={projectionZoom.isInteracting}
+            rangeLabel={projectionZoom.rangeLabel}
+            onResetZoom={projectionZoom.resetZoom}
+            className="h-[280px] sm:h-[320px]"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={projectionZoom.visibleData}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="fiGrossGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.18} />
+                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="fiNetGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={chartGridColor}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: chartTickColor }}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={28}
+                />
+                <YAxis
+                  domain={
+                    projectionZoom.isZoomed ? ["auto", "auto"] : undefined
+                  }
+                  tickFormatter={(v: number) =>
+                    isPrivate ? MASKED_COMPACT : formatCompactBRL(v)
+                  }
+                  tick={{ fontSize: 11, fill: chartTickColor }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={68}
+                />
+                <Tooltip
+                  wrapperStyle={
+                    projectionZoom.isInteracting
+                      ? { display: "none" }
+                      : undefined
+                  }
+                  content={<ProjectionTooltip isPrivate={isPrivate} />}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="grossValueBRL"
+                  name="Bruto"
+                  stroke="#ec4899"
+                  strokeWidth={1.75}
+                  strokeDasharray="4 4"
+                  fill="url(#fiGrossGrad)"
+                  isAnimationActive={
+                    !projectionZoom.isInteracting && !projectionZoom.isZoomed
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="netValueBRL"
+                  name="Líquido"
+                  stroke="#10b981"
+                  strokeWidth={2.25}
+                  fill="url(#fiNetGrad)"
+                  isAnimationActive={
+                    !projectionZoom.isInteracting && !projectionZoom.isZoomed
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="principalBRL"
+                  name="Capital base"
+                  stroke="#94a3b8"
+                  strokeWidth={1.5}
+                  fill="none"
+                  isAnimationActive={
+                    !projectionZoom.isInteracting && !projectionZoom.isZoomed
+                  }
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ZoomableChartContainer>
         </div>
 
         {maturedInHorizon.length > 0 && (
