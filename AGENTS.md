@@ -52,13 +52,17 @@ Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B
 - `pnpm db:push` — aplica alterações do schema Prisma manualmente no PostgreSQL.
 - `pnpm db:fix-event-dates` — script idempotente (`prisma/fix-event-dates.ts`) com `--dry-run` padrão e `--apply`, aceitando `--csv` (aba Aportes) e/ou `--bootstrap` (`GOAL` e `ASSET` iniciais).
 - **Integração com o banco Neon PostgreSQL:**
-  - Quando uma tarefa exigir consulta ou manutenção direta no banco de produção e `DATABASE_URL` não estiver configurada no ambiente, solicitar ao usuário uma **Neon API Key** (com escopo do projeto) ou a `DATABASE_URL` temporária.
+  - Quando uma tarefa exigir consulta ou manutenção direta no banco de produção e `DATABASE_URL` não estiver configurada no ambiente, solicitar ao usuário uma **Neon API Key** (preferencialmente **Project-scoped** para o projeto `snowy-sound-74057301`) ou a `DATABASE_URL` temporária.
+  - **Sempre fornecer ao usuário o link direto para gerar a chave no Neon Console:**
+    - Chave com escopo de projeto (**recomendada**, permissão Editor restrita a um único projeto): abrir o [Neon Console](https://console.neon.tech) → selecionar a organização → **Settings > API keys > Create new > Project-scoped** (projeto `snowy-sound-74057301`).
+    - Atalho direto para chaves pessoais: `https://console.neon.tech/app/settings/api-keys` (**Account settings > API keys**).
+    - Referências oficiais do Neon: gerenciamento de chaves (`https://neon.com/docs/manage/api-keys`) e setup de agentes com Neon CLI/skills/MCP (`https://neon.com/prompts/agent-setup.md`, lembrando que `neon login` exige autenticação interativa no navegador do usuário).
   - Projeto Neon: ID `snowy-sound-74057301` (branch primária `production`, database `neondb`, role `neondb_owner`).
   - Com a API Key, obter a `connection_uri` pela Neon API v2 (`GET https://console.neon.tech/api/v2/projects/snowy-sound-74057301/connection_uri?branch_id=<branch_id>&database_name=neondb&role_name=neondb_owner`, listando branches em `/branches` quando necessário). Atenção: chaves com escopo de projeto retornam `404` em `GET /api/v2/projects` — acessar diretamente `/projects/snowy-sound-74057301/...`.
   - **Segurança e operação obrigatórias:**
     - Nunca imprimir a API Key ou a `DATABASE_URL` em logs/saídas nem salvar em arquivos versionados; passar a URI apenas via variável de ambiente em memória (ou remover qualquer temporário imediatamente após o uso).
     - Sempre executar scripts de escrita primeiro em modo `--dry-run`, apresentar o resumo ao usuário, aplicar (`--apply`) somente após confirmação e re-validar a idempotência em seguida.
-    - Ao concluir a tarefa, lembrar o usuário de revogar/rotacionar a Neon API Key temporária no painel do Neon.
+    - Ao concluir a tarefa, lembrar o usuário de revogar/rotacionar a Neon API Key temporária enviando novamente o link do Neon Console (`https://console.neon.tech` → organização → **Settings > API keys**, ou `https://console.neon.tech/app/settings/api-keys` para chave pessoal).
 - **Autor de commits Git (obrigatório para Vercel Hobby):** antes de criar qualquer commit, garantir `git config user.name "Eryk Humberto Oliveira Alves"` e `git config user.email "erykwho@gmail.com"` para que o Vercel não bloqueie o deploy por colaborador não autorizado em repositório privado.
 - Idioma da interface e comunicação com o usuário: **Português (pt-BR)**.
 - **Roadmap V2 planejado:** Relatório anual de Imposto de Renda (aba `Informe` da planilha), controle de dividendos/proventos e gráfico histórico de evolução patrimonial.
