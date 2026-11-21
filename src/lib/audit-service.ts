@@ -5,6 +5,7 @@ import {
   type AuditEntityType,
   type AuditEvent,
   Prisma,
+  type SectorGoal,
   type Transaction,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -15,15 +16,18 @@ import {
   type AuditEventDTO,
   type AuditSnapshot,
   type GoalSnapshot,
+  type SectorGoalSnapshot,
   TRANSACTION_TYPE_LABELS,
   type TransactionSnapshot,
   evaluateRevertEligibility,
 } from "@/lib/domain/audit";
-import type {
-  AssetClassKey,
-  CurrencyCode,
-  PriceModeKey,
-  TransactionTypeKey,
+import {
+  ASSET_CLASS_LABELS,
+  type AssetClassKey,
+  type CurrencyCode,
+  type PriceModeKey,
+  type TransactionTypeKey,
+  type VariableIncomeClassKey,
 } from "@/lib/domain/types";
 
 type TxClient = Prisma.TransactionClient;
@@ -97,6 +101,22 @@ export function toGoalSnapshot(goal: AllocationGoal): GoalSnapshot {
     usStocksPct: Number(goal.usStocksPct),
     usReitsPct: Number(goal.usReitsPct),
   };
+}
+
+export function toSectorGoalSnapshot(sg: SectorGoal): SectorGoalSnapshot {
+  return {
+    id: sg.id,
+    assetClass: sg.assetClass as VariableIncomeClassKey,
+    name: sg.name,
+    targetPct: Number(sg.targetPct),
+  };
+}
+
+export function buildSectorGoalEntityLabel(sg: {
+  name: string;
+  assetClass: VariableIncomeClassKey;
+}): string {
+  return `${sg.name} (${ASSET_CLASS_LABELS[sg.assetClass]})`;
 }
 
 export function buildTransactionEntityLabel(tx: {
@@ -310,6 +330,7 @@ export async function listAuditEvents(
     ASSET: new Set(),
     TRANSACTION: new Set(),
     GOAL: new Set(),
+    SECTOR_GOAL: new Set(),
   };
   const relevantParentAssetIds = new Set<string>();
   const relevantTickers = new Set<string>();
@@ -329,6 +350,7 @@ export async function listAuditEvents(
     ...entityIdsByType.ASSET,
     ...entityIdsByType.TRANSACTION,
     ...entityIdsByType.GOAL,
+    ...entityIdsByType.SECTOR_GOAL,
   ];
 
   const [
@@ -337,6 +359,8 @@ export async function listAuditEvents(
     existingTransactions,
     existingGoal,
     assetTxRows,
+    existingSectorGoals,
+    sectorLinkedAssets,
   ] = await Promise.all([
     prisma.auditEvent.findMany({
       where: {
@@ -388,6 +412,18 @@ export async function listAuditEvents(
           select: { id: true, assetId: true },
         })
       : Promise.resolve([]),
+    entityIdsByType.SECTOR_GOAL.size > 0
+      ? prisma.sectorGoal.findMany({
+          where: { userId },
+          select: { id: true, assetClass: true, name: true },
+        })
+      : Promise.resolve([]),
+    entityIdsByType.SECTOR_GOAL.size > 0
+      ? prisma.asset.findMany({
+          where: { userId },
+          select: { assetClass: true, sector: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const latestEventIdMap = new Map<string, string>();
@@ -405,6 +441,16 @@ export async function listAuditEvents(
     txIdsByAssetId.set(row.assetId, arr);
   }
 
+  const existingSectorGoalById = new Map(
+    existingSectorGoals.map((sg) => [sg.id, sg])
+  );
+  const sectorKeyToGoalId = new Map(
+    existingSectorGoals.map((sg) => [`${sg.assetClass}::${sg.name}`, sg.id])
+  );
+  const linkedAssetSectorKeys = new Set(
+    sectorLinkedAssets.map((a) => `${a.assetClass}::${a.sector}`)
+  );
+
   const events: AuditEventDTO[] = pageEvents.map((ev) => {
     const entityType = ev.entityType as AuditEntityTypeKey;
     const action = ev.action as AuditActionKey;
@@ -418,6 +464,8 @@ export async function listAuditEvents(
     let parentAssetExists: boolean | undefined;
     let tickerConflictExists: boolean | undefined;
     let currentAssetTransactionIds: string[] | undefined;
+    let sectorNameConflictExists: boolean | undefined;
+    let sectorHasLinkedAssets: boolean | undefined;
 
     if (entityType === "ASSET") {
       currentEntityExists = existingAssetIdSet.has(ev.entityId);
@@ -436,6 +484,22 @@ export async function listAuditEvents(
       }
     } else if (entityType === "GOAL") {
       currentEntityExists = existingGoal?.id === ev.entityId;
+    } else if (entityType === "SECTOR_GOAL") {
+      const currentSg = existingSectorGoalById.get(ev.entityId);
+      currentEntityExists = Boolean(currentSg);
+      if (currentSg) {
+        sectorHasLinkedAssets = linkedAssetSectorKeys.has(
+          `${currentSg.assetClass}::${currentSg.name}`
+        );
+      }
+      if (beforeState) {
+        const beforeSg = beforeState as SectorGoalSnapshot;
+        const ownerId = sectorKeyToGoalId.get(
+          `${beforeSg.assetClass}::${beforeSg.name}`
+        );
+        sectorNameConflictExists =
+          ownerId !== undefined && ownerId !== ev.entityId;
+      }
     }
 
     const eligibility = evaluateRevertEligibility({
@@ -449,6 +513,8 @@ export async function listAuditEvents(
       parentAssetExists,
       tickerConflictExists,
       currentAssetTransactionIds,
+      sectorNameConflictExists,
+      sectorHasLinkedAssets,
     });
 
     return {
@@ -517,6 +583,8 @@ export async function revertAuditEvent(
     let parentAssetExists: boolean | undefined;
     let tickerConflictExists: boolean | undefined;
     let currentAssetTransactionIds: string[] | undefined;
+    let sectorNameConflictExists: boolean | undefined;
+    let sectorHasLinkedAssets: boolean | undefined;
 
     if (entityType === "ASSET") {
       const currentAsset = await tx.asset.findFirst({
@@ -562,6 +630,38 @@ export async function revertAuditEvent(
         select: { id: true },
       });
       currentEntityExists = Boolean(currentGoal);
+    } else if (entityType === "SECTOR_GOAL") {
+      const currentSg = await tx.sectorGoal.findFirst({
+        where: { id: target.entityId, userId },
+        select: { id: true, assetClass: true, name: true },
+      });
+      currentEntityExists = Boolean(currentSg);
+
+      if (currentSg) {
+        const linkedAsset = await tx.asset.findFirst({
+          where: {
+            userId,
+            assetClass: currentSg.assetClass,
+            sector: currentSg.name,
+          },
+          select: { id: true },
+        });
+        sectorHasLinkedAssets = Boolean(linkedAsset);
+      }
+
+      if (beforeState) {
+        const beforeSg = beforeState as SectorGoalSnapshot;
+        const conflict = await tx.sectorGoal.findFirst({
+          where: {
+            userId,
+            assetClass: beforeSg.assetClass,
+            name: beforeSg.name,
+            id: { not: target.entityId },
+          },
+          select: { id: true },
+        });
+        sectorNameConflictExists = Boolean(conflict);
+      }
     }
 
     const eligibility = evaluateRevertEligibility({
@@ -575,6 +675,8 @@ export async function revertAuditEvent(
       parentAssetExists,
       tickerConflictExists,
       currentAssetTransactionIds,
+      sectorNameConflictExists,
+      sectorHasLinkedAssets,
     });
 
     if (!eligibility.canRevert) {
@@ -745,6 +847,52 @@ export async function revertAuditEvent(
       });
       nextLabel = "Objetivos de Alocação";
       nextAfterState = toGoalSnapshot(updated);
+    } else if (entityType === "SECTOR_GOAL") {
+      const before = beforeState as SectorGoalSnapshot | null;
+      const after = afterState as SectorGoalSnapshot | null;
+
+      if (!before && after) {
+        // Desfazer criação -> exclui objetivo de setor
+        await tx.sectorGoal.delete({ where: { id: target.entityId } });
+        nextLabel = buildSectorGoalEntityLabel(after);
+      } else if (before && !after) {
+        // Desfazer exclusão -> recria objetivo de setor
+        await tx.sectorGoal.create({
+          data: {
+            id: before.id,
+            userId,
+            assetClass: before.assetClass,
+            name: before.name,
+            targetPct: before.targetPct,
+          },
+        });
+        nextLabel = buildSectorGoalEntityLabel(before);
+      } else if (before && after) {
+        // Desfazer edição -> restaura nome/meta e renomeia ativos se nome mudou
+        const currentSg = await tx.sectorGoal.findFirstOrThrow({
+          where: { id: target.entityId, userId },
+        });
+        const updated = await tx.sectorGoal.update({
+          where: { id: target.entityId },
+          data: {
+            name: before.name,
+            targetPct: before.targetPct,
+          },
+        });
+        if (currentSg.name !== before.name) {
+          await tx.asset.updateMany({
+            where: {
+              userId,
+              assetClass: currentSg.assetClass,
+              sector: currentSg.name,
+            },
+            data: { sector: before.name },
+          });
+        }
+        const snap = toSectorGoalSnapshot(updated);
+        nextLabel = buildSectorGoalEntityLabel(snap);
+        nextAfterState = snap;
+      }
     }
 
     const revertEvent = await recordAuditEvent(tx, {

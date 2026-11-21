@@ -7,6 +7,10 @@ export type AssetClassKey =
   | "EMERGENCY_RESERVE";
 
 export type InvestmentClassKey = Exclude<AssetClassKey, "EMERGENCY_RESERVE">;
+export type VariableIncomeClassKey = Exclude<
+  InvestmentClassKey,
+  "FIXED_INCOME"
+>;
 
 export type CurrencyCode = "BRL" | "USD";
 export type PriceModeKey = "AUTO_YAHOO" | "MANUAL";
@@ -49,6 +53,24 @@ export const INVESTMENT_CLASSES: InvestmentClassKey[] = [
   "US_REIT",
 ];
 
+export const VARIABLE_INCOME_CLASSES: VariableIncomeClassKey[] = [
+  "BR_STOCK",
+  "BR_FII",
+  "US_STOCK",
+  "US_REIT",
+];
+
+export function isVariableIncomeClass(
+  cls: AssetClassKey
+): cls is VariableIncomeClassKey {
+  return (
+    cls === "BR_STOCK" ||
+    cls === "BR_FII" ||
+    cls === "US_STOCK" ||
+    cls === "US_REIT"
+  );
+}
+
 export const ALL_ASSET_CLASSES: AssetClassKey[] = [
   ...INVESTMENT_CLASSES,
   "EMERGENCY_RESERVE",
@@ -81,6 +103,13 @@ export interface GoalInput {
   brFiisPct: number;
   usStocksPct: number;
   usReitsPct: number;
+}
+
+export interface SectorGoalInput {
+  id: string;
+  assetClass: VariableIncomeClassKey;
+  name: string;
+  targetPct: number;
 }
 
 export interface AssetInput {
@@ -157,6 +186,8 @@ export interface ClassSummary {
   diffPct: number;
   balanceNeededBRL: number;
   targetSumInClass: number;
+  hasSectorGoals: boolean;
+  sectorGoalSumInClass: number;
 }
 
 export interface HierarchyRow {
@@ -168,12 +199,26 @@ export interface HierarchyRow {
   diffPct: number;
 }
 
+export type SectorCoverageStatus =
+  | "UNCOVERED"
+  | "UNDER"
+  | "EXACT"
+  | "OVER"
+  | "UNTRACKED";
+
 export interface SectorSummary {
+  id: string | null;
   assetClass: AssetClassKey;
   sector: string;
   currentValueBRL: number;
+  goalTargetPct: number | null;
   targetPctInClass: number;
   actualPctInClass: number;
+  activeAssetCount: number;
+  totalAssetCount: number;
+  assetTickers: string[];
+  diffFromGoalPct: number | null;
+  status: SectorCoverageStatus;
 }
 
 export interface PortfolioSummary {

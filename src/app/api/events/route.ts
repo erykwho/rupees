@@ -8,6 +8,7 @@ const VALID_ENTITY_TYPES = new Set<AuditEntityTypeKey | "ALL">([
   "ASSET",
   "TRANSACTION",
   "GOAL",
+  "SECTOR_GOAL",
 ]);
 
 const VALID_ACTIONS = new Set<AuditActionKey | "ALL">([

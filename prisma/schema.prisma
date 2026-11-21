@@ -36,6 +36,7 @@ enum AuditEntityType {
   ASSET
   TRANSACTION
   GOAL
+  SECTOR_GOAL
 }
 
 enum AuditAction {
@@ -62,6 +63,7 @@ model User {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   goal         AllocationGoal?
+  sectorGoals  SectorGoal[]
   assets       Asset[]
   transactions Transaction[]
   auditEvents  AuditEvent[]
@@ -80,6 +82,20 @@ model AllocationGoal {
   usStocksPct       Decimal  @default(70) @db.Decimal(6, 2)
   usReitsPct        Decimal  @default(30) @db.Decimal(6, 2)
   updatedAt         DateTime @updatedAt
+}
+
+model SectorGoal {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assetClass AssetClass
+  name       String
+  targetPct  Decimal    @default(0) @db.Decimal(6, 2)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([userId, assetClass, name])
+  @@index([userId, assetClass])
 }
 
 model Asset {

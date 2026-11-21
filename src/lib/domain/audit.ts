@@ -6,19 +6,25 @@ import {
   type FixedIncomeIndexKey,
   type PriceModeKey,
   type TransactionTypeKey,
+  type VariableIncomeClassKey,
   formatCurrency,
   formatPct,
   formatQty,
 } from "./types";
 import { MASKED_BRL, MASKED_QTY, MASKED_USD } from "../privacy";
 
-export type AuditEntityTypeKey = "ASSET" | "TRANSACTION" | "GOAL";
+export type AuditEntityTypeKey =
+  | "ASSET"
+  | "TRANSACTION"
+  | "GOAL"
+  | "SECTOR_GOAL";
 export type AuditActionKey = "CREATE" | "UPDATE" | "DELETE" | "REVERT";
 
 export const AUDIT_ENTITY_LABELS: Record<AuditEntityTypeKey, string> = {
   ASSET: "Carteira",
   TRANSACTION: "Lançamentos",
   GOAL: "Objetivos",
+  SECTOR_GOAL: "Setores",
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditActionKey, string> = {
@@ -83,7 +89,18 @@ export interface GoalSnapshot {
   usReitsPct: number;
 }
 
-export type AuditSnapshot = AssetSnapshot | TransactionSnapshot | GoalSnapshot;
+export interface SectorGoalSnapshot {
+  id: string;
+  assetClass: VariableIncomeClassKey;
+  name: string;
+  targetPct: number;
+}
+
+export type AuditSnapshot =
+  | AssetSnapshot
+  | TransactionSnapshot
+  | GoalSnapshot
+  | SectorGoalSnapshot;
 
 export interface AuditDiffField {
   key: string;
@@ -124,6 +141,8 @@ export interface RevertEligibilityInput {
   parentAssetExists?: boolean;
   tickerConflictExists?: boolean;
   currentAssetTransactionIds?: string[];
+  sectorNameConflictExists?: boolean;
+  sectorHasLinkedAssets?: boolean;
 }
 
 function formatMaskedCurrency(
@@ -369,6 +388,54 @@ export function computeAuditDiffs(
     return diffs;
   }
 
+  if (entityType === "SECTOR_GOAL") {
+    const before = beforeState as SectorGoalSnapshot | null;
+    const after = afterState as SectorGoalSnapshot | null;
+    const diffs: AuditDiffField[] = [];
+
+    const pushIfChanged = (
+      key: string,
+      label: string,
+      rawEqual: boolean,
+      beforeStr: string | null,
+      afterStr: string | null
+    ) => {
+      if (before && after && rawEqual) return;
+      if (beforeStr === null && afterStr === null) return;
+      diffs.push({
+        key,
+        label,
+        before: beforeStr,
+        after: afterStr,
+        sensitive: false,
+      });
+    };
+
+    pushIfChanged(
+      "assetClass",
+      "Classe",
+      before?.assetClass === after?.assetClass,
+      before ? ASSET_CLASS_LABELS[before.assetClass] : null,
+      after ? ASSET_CLASS_LABELS[after.assetClass] : null
+    );
+    pushIfChanged(
+      "name",
+      "Setor",
+      before?.name === after?.name,
+      before?.name ?? null,
+      after?.name ?? null
+    );
+    pushIfChanged(
+      "targetPct",
+      "Meta na classe",
+      numbersEqual(before?.targetPct, after?.targetPct),
+      before ? formatPct(before.targetPct, 1) : null,
+      after ? formatPct(after.targetPct, 1) : null
+    );
+
+    return diffs;
+  }
+
   // GOAL
   const before = beforeState as GoalSnapshot | null;
   const after = afterState as GoalSnapshot | null;
@@ -462,6 +529,26 @@ export function buildEventSummary(
     return `${after?.assetTicker ?? entityLabel} · ${preview}${diffs.length > 2 ? ` (+${diffs.length - 2})` : ""}`;
   }
 
+  if (entityType === "SECTOR_GOAL") {
+    const before = beforeState as SectorGoalSnapshot | null;
+    const after = afterState as SectorGoalSnapshot | null;
+    if (!before && after) {
+      const prefix = action === "REVERT" ? "Setor restaurado" : "Novo setor";
+      return `${prefix}: ${after.name} (${ASSET_CLASS_LABELS[after.assetClass]} · Meta ${formatPct(after.targetPct, 1)})`;
+    }
+    if (before && !after) {
+      const prefix = action === "REVERT" ? "Criação desfeita" : "Setor excluído";
+      return `${prefix}: ${before.name} (${ASSET_CLASS_LABELS[before.assetClass]})`;
+    }
+    const diffs = computeAuditDiffs(entityType, beforeState, afterState, { isPrivate });
+    if (diffs.length === 0) return `${entityLabel} atualizado`;
+    const preview = diffs
+      .slice(0, 2)
+      .map((d) => `${d.label}: ${d.before ?? "—"} → ${d.after ?? "—"}`)
+      .join(" · ");
+    return `${after?.name ?? entityLabel} · ${preview}${diffs.length > 2 ? ` (+${diffs.length - 2})` : ""}`;
+  }
+
   // GOAL
   if (!beforeState && afterState) {
     const goal = afterState as GoalSnapshot;
@@ -511,6 +598,18 @@ export function buildRevertDescription(
       return `Restaurar o lançamento de ${TRANSACTION_TYPE_LABELS[before.type].toLowerCase()} de ${before.assetTicker}.`;
     }
     return `Restaurar os dados anteriores do lançamento de ${before?.assetTicker ?? ""}.`;
+  }
+
+  if (entityType === "SECTOR_GOAL") {
+    const before = beforeState as SectorGoalSnapshot | null;
+    const after = afterState as SectorGoalSnapshot | null;
+    if (!before && after) {
+      return `Remover o objetivo do setor ${after.name} (${ASSET_CLASS_LABELS[after.assetClass]}).`;
+    }
+    if (before && !after) {
+      return `Restaurar o objetivo do setor ${before.name} (${ASSET_CLASS_LABELS[before.assetClass]}).`;
+    }
+    return `Restaurar os dados anteriores do setor ${before?.name ?? ""}.`;
   }
 
   return "Restaurar os percentuais anteriores dos objetivos de alocação.";
@@ -570,6 +669,14 @@ export function evaluateRevertEligibility(
       }
     }
 
+    if (input.entityType === "SECTOR_GOAL" && input.sectorHasLinkedAssets) {
+      return {
+        canRevert: false,
+        reason:
+          "Este setor possui ativos vinculados na carteira. Reatribua os ativos antes de desfazer este evento.",
+      };
+    }
+
     return { canRevert: true, reason: null };
   }
 
@@ -588,6 +695,16 @@ export function evaluateRevertEligibility(
         return {
           canRevert: false,
           reason: `Já existe outro ativo com o ticker ${beforeAsset.ticker} na sua carteira.`,
+        };
+      }
+    }
+
+    if (input.entityType === "SECTOR_GOAL") {
+      const beforeSector = input.beforeState as SectorGoalSnapshot;
+      if (input.sectorNameConflictExists) {
+        return {
+          canRevert: false,
+          reason: `Já existe outro setor chamado "${beforeSector.name}" nesta classe.`,
         };
       }
     }
@@ -619,6 +736,14 @@ export function evaluateRevertEligibility(
       return {
         canRevert: false,
         reason: `Já existe outro ativo com o ticker ${beforeAsset.ticker} na sua carteira.`,
+      };
+    }
+
+    if (input.entityType === "SECTOR_GOAL" && input.sectorNameConflictExists) {
+      const beforeSector = input.beforeState as SectorGoalSnapshot;
+      return {
+        canRevert: false,
+        reason: `Já existe outro setor chamado "${beforeSector.name}" nesta classe.`,
       };
     }
 
