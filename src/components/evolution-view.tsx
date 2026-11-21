@@ -1,20 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowUpRight,
   Calendar,
+  Check,
+  ChevronDown,
   Coins,
   Landmark,
   Layers,
   Plus,
   RefreshCw,
   Shield,
+  SlidersHorizontal,
   TrendingDown,
   TrendingUp,
   Wallet,
+  X,
 } from "lucide-react";
 import {
   Area,
@@ -540,12 +544,40 @@ export function EvolutionView({
   const [splitByClass, setSplitByClass] = useState(false);
   const [contributionGrouping, setContributionGrouping] =
     useState<EvolutionGranularity>("MONTHLY");
+  const [classesSheetOpen, setClassesSheetOpen] = useState(false);
 
   const eligibleClasses: AssetClassKey[] = includeReserve
     ? ALL_ASSET_CLASSES
     : INVESTMENT_CLASSES;
 
   const isTotalSelected = selectedClasses.length === 0;
+
+  const mobileClassesLabel = useMemo(() => {
+    if (isTotalSelected) return "Total";
+    if (selectedClasses.length === 1) {
+      return ASSET_CLASS_LABELS[selectedClasses[0]];
+    }
+    return `${selectedClasses.length} classes`;
+  }, [isTotalSelected, selectedClasses]);
+
+  useEffect(() => {
+    if (!classesSheetOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setClassesSheetOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [classesSheetOpen]);
 
   function toggleClass(cls: AssetClassKey) {
     setSelectedClasses((prev) => {
@@ -648,7 +680,8 @@ export function EvolutionView({
   const refLineStroke = isDark ? "#475569" : "#94a3b8";
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -750,8 +783,117 @@ export function EvolutionView({
         </div>
       ) : (
         <>
-          {/* Filter Bar */}
-          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          {/* Mobile Compact Sticky Filter Bar */}
+          <div className="sticky top-[60px] z-20 md:hidden">
+            <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 p-1.5 shadow-xs backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
+              {/* Classes Bottom Sheet Trigger */}
+              <button
+                type="button"
+                onClick={() => setClassesSheetOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={classesSheetOpen}
+                aria-label={`Filtrar classes de ativo: ${selectionDescription}`}
+                className={cn(
+                  "flex h-8 min-w-0 flex-1 items-center justify-between gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors",
+                  !isTotalSelected || includeReserve
+                    ? "border-slate-300 bg-slate-100/90 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-200"
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {isTotalSelected ? (
+                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+                  ) : selectedClasses.length === 1 ? (
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: ASSET_CLASS_COLORS[selectedClasses[0]],
+                      }}
+                    />
+                  ) : (
+                    <span className="flex shrink-0 -space-x-1">
+                      {selectedClasses.slice(0, 3).map((cls) => (
+                        <span
+                          key={cls}
+                          className="h-2 w-2 rounded-full ring-1 ring-white dark:ring-slate-900"
+                          style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  <span className="truncate">{mobileClassesLabel}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  {includeReserve && (
+                    <Shield
+                      className="h-3 w-3 text-emerald-600 dark:text-emerald-400"
+                      aria-label="Reserva incluída"
+                    />
+                  )}
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                </span>
+              </button>
+
+              {/* Native Period Select */}
+              <div className="relative shrink-0">
+                <Calendar
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-emerald-600 dark:text-emerald-400"
+                />
+                <select
+                  aria-label="Período"
+                  value={range}
+                  onChange={(e) => setRange(e.target.value as EvolutionRange)}
+                  className="h-8 appearance-none rounded-lg border border-slate-200 bg-white pl-7 pr-6 text-xs font-semibold text-slate-700 transition-colors focus:border-emerald-500 focus:outline-none dark:border-slate-700/80 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  {RANGE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                />
+              </div>
+
+              {/* Compact Granularity Toggle */}
+              <div className="inline-flex h-8 shrink-0 items-center rounded-lg bg-slate-100 p-0.5 text-[11px] font-semibold dark:bg-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setGranularity("DAILY")}
+                  aria-label="Visão diária"
+                  aria-pressed={granularity === "DAILY"}
+                  className={cn(
+                    "h-7 rounded-md px-2 transition-colors",
+                    granularity === "DAILY"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  )}
+                >
+                  Dia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGranularity("MONTHLY")}
+                  aria-label="Visão mensal"
+                  aria-pressed={granularity === "MONTHLY"}
+                  className={cn(
+                    "h-7 rounded-md px-2 transition-colors",
+                    granularity === "MONTHLY"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  )}
+                >
+                  Mês
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Filter Bar */}
+          <div className="hidden space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900 md:block">
             {/* Row 1: Asset Class Multi-Select Chips + Reserve Toggle */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -1475,6 +1617,169 @@ export function EvolutionView({
           </div>
         </>
       )}
-    </div>
+      </div>
+
+      {/* Mobile Classes Bottom Sheet */}
+      {activeTab === "HISTORICO" && classesSheetOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div
+            onClick={() => setClassesSheetOpen(false)}
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs dark:bg-slate-950/70"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Selecionar classes de ativo"
+            className="pb-safe fixed inset-x-0 bottom-0 flex max-h-[82vh] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="flex justify-center pt-2.5 pb-1">
+              <span className="h-1 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
+            </div>
+
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 pb-3 pt-1 dark:border-slate-800">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Classes de Ativo
+                </h2>
+                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                  {selectionDescription}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClassesSheetOpen(false)}
+                aria-label="Fechar filtro de classes"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
+              {/* Total option */}
+              <button
+                type="button"
+                onClick={() => setSelectedClasses([])}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition-colors",
+                  isTotalSelected
+                    ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                )}
+              >
+                <span>
+                  {includeReserve ? "Total (com Reserva)" : "Total investido"}
+                </span>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
+                    isTotalSelected
+                      ? "border-white bg-white text-slate-900 dark:border-slate-900 dark:bg-slate-900 dark:text-slate-100"
+                      : "border-slate-300 dark:border-slate-600"
+                  )}
+                >
+                  {isTotalSelected && <Check className="h-3 w-3" />}
+                </span>
+              </button>
+
+              {/* Individual asset classes */}
+              <div className="space-y-1 pt-1">
+                {eligibleClasses.map((cls) => {
+                  const active = selectedClasses.includes(cls);
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      onClick={() => toggleClass(cls)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-medium transition-colors",
+                        active
+                          ? "border-emerald-600/70 bg-emerald-50/70 text-slate-900 dark:border-emerald-500/60 dark:bg-emerald-950/35 dark:text-slate-100"
+                          : "border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                      )}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor: ASSET_CLASS_COLORS[cls],
+                          }}
+                        />
+                        {ASSET_CLASS_LABELS[cls]}
+                      </span>
+                      <span
+                        className={cn(
+                          "flex h-5 w-5 items-center justify-center rounded-md border transition-colors",
+                          active
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-slate-300 dark:border-slate-600"
+                        )}
+                      >
+                        {active && <Check className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Include Reserve Switch */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={includeReserve}
+                  onClick={handleToggleReserve}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-3 text-left transition-colors hover:bg-slate-100/80 dark:border-slate-800 dark:bg-slate-800/50 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Shield
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        includeReserve
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      )}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        Incluir Reserva
+                      </span>
+                      <span className="block text-xs text-slate-500 dark:text-slate-400">
+                        Soma a Reserva de Emergência aos gráficos
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors",
+                      includeReserve
+                        ? "bg-emerald-600"
+                        : "bg-slate-300 dark:bg-slate-600"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-4 w-4 rounded-full bg-white shadow-xs transition-transform",
+                        includeReserve ? "translate-x-5" : "translate-x-1"
+                      )}
+                    />
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setClassesSheetOpen(false)}
+                className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+              >
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
