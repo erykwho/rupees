@@ -9,12 +9,19 @@ import {
   LogOut,
   PieChart,
   Target,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Geral", fullLabel: "Visão Geral", icon: LayoutDashboard },
   { href: "/carteira", label: "Carteira", fullLabel: "Carteira", icon: PieChart },
+  {
+    href: "/evolucao",
+    label: "Evolução",
+    fullLabel: "Evolução",
+    icon: TrendingUp,
+  },
   {
     href: "/lancamentos",
     label: "Lançamentos",
@@ -29,6 +36,8 @@ const NAV_ITEMS = [
   },
   { href: "/objetivos", label: "Objetivos", fullLabel: "Objetivos", icon: Target },
 ];
+
+const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.href !== "/objetivos");
 
 interface AppShellProps {
   user: {
@@ -148,15 +157,37 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
           </span>
         </Link>
 
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        <div className="flex items-center gap-1">
+          <Link
+            href="/objetivos"
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+              pathname.startsWith("/objetivos")
+                ? "bg-emerald-50 text-emerald-700"
+                : "text-slate-600 hover:bg-slate-100"
+            )}
           >
-            <LogOut className="h-3.5 w-3.5" />
-            Sair
-          </button>
-        </form>
+            <Target
+              className={cn(
+                "h-3.5 w-3.5",
+                pathname.startsWith("/objetivos")
+                  ? "text-emerald-600"
+                  : "text-slate-400"
+              )}
+            />
+            Objetivos
+          </Link>
+
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sair
+            </button>
+          </form>
+        </div>
       </header>
 
       {/* Main Content */}
@@ -172,7 +203,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/90 bg-white/95 backdrop-blur-md lg:hidden"
       >
         <div className="grid grid-cols-5">
-          {NAV_ITEMS.map((item) => {
+          {MOBILE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active =
               item.href === "/"
