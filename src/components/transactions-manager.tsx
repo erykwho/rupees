@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  ALL_ASSET_CLASSES,
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   type CurrencyCode,
@@ -92,9 +93,12 @@ export function TransactionsManager({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultAssetId = assets[0]?.id ?? "";
+  const [assetClassFilter, setAssetClassFilter] = useState<
+    AssetClassKey | "ALL"
+  >("ALL");
+
   const [form, setForm] = useState<TxFormState>({
-    assetId: defaultAssetId,
+    assetId: "",
     date: new Date().toISOString().slice(0, 10),
     type: "BUY",
     quantity: "",
@@ -103,6 +107,22 @@ export function TransactionsManager({
     fixedIncomeRate: "",
     notes: "",
   });
+
+  const availableClasses = useMemo(
+    () =>
+      ALL_ASSET_CLASSES.filter((cls) =>
+        assets.some((a) => a.assetClass === cls)
+      ),
+    [assets]
+  );
+
+  const filteredAssets = useMemo(
+    () =>
+      assetClassFilter === "ALL"
+        ? assets
+        : assets.filter((a) => a.assetClass === assetClassFilter),
+    [assets, assetClassFilter]
+  );
 
   const selectedAsset = assets.find((a) => a.id === form.assetId);
   const showFixedIncomeRateInput =
@@ -135,8 +155,9 @@ export function TransactionsManager({
 
   function openCreateModal() {
     setError(null);
+    setAssetClassFilter("ALL");
     setForm({
-      assetId: assets[0]?.id ?? "",
+      assetId: "",
       date: new Date().toISOString().slice(0, 10),
       type: "BUY",
       quantity: "",
@@ -150,6 +171,7 @@ export function TransactionsManager({
 
   function openEditModal(tx: TransactionRow) {
     setError(null);
+    setAssetClassFilter(tx.asset.assetClass);
     setForm({
       id: tx.id,
       assetId: tx.assetId,
@@ -452,6 +474,33 @@ export function TransactionsManager({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Classe
+                  </label>
+                  <select
+                    value={assetClassFilter}
+                    onChange={(e) => {
+                      const nextClass = e.target.value as
+                        | AssetClassKey
+                        | "ALL";
+                      setAssetClassFilter(nextClass);
+                      setForm((prev) => ({
+                        ...prev,
+                        assetId: "",
+                      }));
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="ALL">Todas as classes</option>
+                    {availableClasses.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {ASSET_CLASS_LABELS[cls]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Ativo
                   </label>
                   <select
@@ -461,25 +510,32 @@ export function TransactionsManager({
                       const nextAsset = assets.find(
                         (a) => a.id === e.target.value
                       );
-                      const isFixed =
-                        nextAsset?.assetClass === "FIXED_INCOME" ||
-                        nextAsset?.assetClass === "EMERGENCY_RESERVE";
-                      setForm({
-                        ...form,
+                      const isFixed = nextAsset
+                        ? isFixedIncomeClass(nextAsset.assetClass)
+                        : false;
+                      setForm((prev) => ({
+                        ...prev,
                         assetId: e.target.value,
-                        unitPrice: isFixed ? "1" : form.unitPrice,
-                      });
+                        unitPrice: isFixed ? "1" : prev.unitPrice,
+                      }));
                     }}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
-                    {assets.map((a) => (
+                    <option value="" disabled>
+                      Selecione um ativo...
+                    </option>
+                    {filteredAssets.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.ticker} ({ASSET_CLASS_LABELS[a.assetClass]})
+                        {assetClassFilter === "ALL"
+                          ? `${a.ticker} (${ASSET_CLASS_LABELS[a.assetClass]})`
+                          : a.ticker}
                       </option>
                     ))}
                   </select>
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Tipo
@@ -499,19 +555,19 @@ export function TransactionsManager({
                     <option value="BALANCE_ADJUSTMENT">Ajuste de Saldo</option>
                   </select>
                 </div>
-              </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Data
-                </label>
-                <input
-                  required
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                />
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Data
+                  </label>
+                  <input
+                    required
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2.5">
