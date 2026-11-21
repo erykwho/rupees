@@ -82,9 +82,9 @@ const RANGE_OPTIONS: Array<{ value: EvolutionRange; label: string }> = [
 ];
 
 const CHART_MODES: Array<{ value: EvolutionChartMode; label: string }> = [
-  { value: "PATRIMONIO", label: "Patrimônio vs. Aportado" },
+  { value: "PATRIMONIO", label: "Patrimônio" },
   { value: "GANHO", label: "Ganho (R$)" },
-  { value: "RENTABILIDADE", label: "Rentabilidade (%)" },
+  { value: "RENTABILIDADE", label: "Retorno (%)" },
 ];
 
 function formatCompactBRL(value: number): string {
@@ -555,7 +555,7 @@ export function EvolutionView({
   const isTotalSelected = selectedClasses.length === 0;
 
   const mobileClassesLabel = useMemo(() => {
-    if (isTotalSelected) return "Total";
+    if (isTotalSelected) return "Todas as classes";
     if (selectedClasses.length === 1) {
       return ASSET_CLASS_LABELS[selectedClasses[0]];
     }
@@ -734,45 +734,45 @@ export function EvolutionView({
       </div>
 
       {/* Main View Tabs */}
-      <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900">
+      <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-slate-100/80 p-1 sm:inline-flex sm:w-auto dark:border-slate-800 dark:bg-slate-900">
         <button
           type="button"
           onClick={() => setActiveTab("HISTORICO")}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold transition sm:px-3.5",
             activeTab === "HISTORICO"
               ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
               : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
           )}
         >
-          <TrendingUp className="h-3.5 w-3.5" />
+          <TrendingUp className="h-3.5 w-3.5 shrink-0" />
           Histórico
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("PROJECAO")}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold transition sm:px-3.5",
             activeTab === "PROJECAO"
               ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
               : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
           )}
         >
-          <Sparkles className="h-3.5 w-3.5" />
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
           Projeção
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("RENDA_FIXA")}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold transition sm:px-3.5",
             activeTab === "RENDA_FIXA"
               ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
               : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
           )}
         >
-          <Landmark className="h-3.5 w-3.5" />
-          Projeção Renda Fixa
+          <Landmark className="h-3.5 w-3.5 shrink-0" />
+          Projeção RF
         </button>
       </div>
 
@@ -927,7 +927,7 @@ export function EvolutionView({
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                   )}
                 >
-                  Total
+                  Todas as classes
                 </button>
 
                 {eligibleClasses.map((cls) => {
@@ -1103,60 +1103,84 @@ export function EvolutionView({
           />
 
           {/* Chart 1: Patrimônio vs Aportado / Ganho / Rentabilidade */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {chartMode === "PATRIMONIO" &&
-                    (splitByClass && activeClasses.length > 1
-                      ? "Patrimônio por Classe"
-                      : "Patrimônio vs. Aportado")}
-                  {chartMode === "GANHO" &&
-                    (splitByClass && activeClasses.length > 1
-                      ? "Rendimento por Classe (R$)"
-                      : "Evolução do Rendimento (R$)")}
-                  {chartMode === "RENTABILIDADE" &&
-                    (splitByClass && activeClasses.length > 1
-                      ? "Rentabilidade por Classe (%)"
-                      : "Rentabilidade Acumulada (%)")}
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Visão {granularity === "DAILY" ? "diária" : "mensal"} ·{" "}
-                  {selectionDescription}
-                  {showsEstimatedFixedIncome &&
-                    " · Renda Fixa com ganho estimado líquido de IR"}
-                </p>
-              </div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs sm:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <div className="flex items-start justify-between gap-2 sm:block">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {chartMode === "PATRIMONIO" &&
+                      (splitByClass && activeClasses.length > 1
+                        ? "Patrimônio por Classe"
+                        : "Patrimônio vs. Aportado")}
+                    {chartMode === "GANHO" &&
+                      (splitByClass && activeClasses.length > 1
+                        ? "Rendimento por Classe (R$)"
+                        : "Evolução do Rendimento (R$)")}
+                    {chartMode === "RENTABILIDADE" &&
+                      (splitByClass && activeClasses.length > 1
+                        ? "Rentabilidade por Classe (%)"
+                        : "Rentabilidade Acumulada (%)")}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Visão {granularity === "DAILY" ? "diária" : "mensal"} ·{" "}
+                    {selectionDescription}
+                    {showsEstimatedFixedIncome &&
+                      " · Renda Fixa com ganho estimado líquido de IR"}
+                  </p>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+                {/* Mobile Por classe toggle beside title */}
                 <button
                   type="button"
                   onClick={() => setSplitByClass((prev) => !prev)}
                   disabled={activeClasses.length <= 1}
                   title={
                     activeClasses.length <= 1
-                      ? "Selecione mais de uma classe (ou Total) para comparar linhas por classe"
+                      ? "Selecione mais de uma classe (ou Todas as classes) para comparar linhas por classe"
                       : "Alternar entre visão consolidada e uma linha por classe de ativo"
                   }
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:hidden",
                     splitByClass && activeClasses.length > 1
                       ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-300"
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   )}
                 >
-                  <Layers className="h-3.5 w-3.5" />
+                  <Layers className="h-3 w-3 shrink-0" />
+                  Por classe
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Desktop Por classe toggle */}
+                <button
+                  type="button"
+                  onClick={() => setSplitByClass((prev) => !prev)}
+                  disabled={activeClasses.length <= 1}
+                  title={
+                    activeClasses.length <= 1
+                      ? "Selecione mais de uma classe (ou Todas as classes) para comparar linhas por classe"
+                      : "Alternar entre visão consolidada e uma linha por classe de ativo"
+                  }
+                  className={cn(
+                    "hidden shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 sm:inline-flex",
+                    splitByClass && activeClasses.length > 1
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5 shrink-0" />
                   Por classe
                 </button>
 
-                <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
+                <div className="grid w-full grid-cols-3 rounded-xl bg-slate-100 p-0.5 text-xs font-semibold sm:inline-flex sm:w-auto dark:bg-slate-800">
                   {CHART_MODES.map((m) => (
                     <button
                       key={m.value}
                       type="button"
                       onClick={() => setChartMode(m.value)}
                       className={cn(
-                        "rounded-lg px-2.5 py-1.5 transition-colors",
+                        "whitespace-nowrap rounded-lg px-2 py-1.5 text-center transition-colors sm:px-2.5",
                         chartMode === m.value
                           ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
                           : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
@@ -1688,7 +1712,9 @@ export function EvolutionView({
                 )}
               >
                 <span>
-                  {includeReserve ? "Total (com Reserva)" : "Total investido"}
+                  {includeReserve
+                    ? "Todas as classes (com Reserva)"
+                    : "Todas as classes"}
                 </span>
                 <span
                   className={cn(
