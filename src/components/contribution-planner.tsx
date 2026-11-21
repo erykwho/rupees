@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import {
+  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   INVESTMENT_CLASSES,
   type ContributionSuggestion,
@@ -343,6 +344,100 @@ export function ContributionPlanner({
             })}
           </div>
         )}
+      </section>
+
+      {/* Allocation Table by Class */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Alocação por Classe
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Comparação entre objetivo definido e carteira atual
+            </p>
+          </div>
+          <Link
+            href="/objetivos"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+          >
+            Alterar objetivos
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                <th className="px-5 py-3">Classe</th>
+                <th className="px-4 py-3 text-right">Objetivo</th>
+                <th className="px-4 py-3 text-right">Real</th>
+                <th className="px-4 py-3 text-right">Diff</th>
+                <th className="px-4 py-3 text-right">Investido</th>
+                <th className="px-5 py-3 text-right">Balancear</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {summary.classes.map((c) => {
+                const underTarget = c.balanceNeededBRL > 0;
+                return (
+                  <tr
+                    key={c.assetClass}
+                    className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
+                  >
+                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
+                      <span className="inline-flex items-center gap-2.5">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{
+                            backgroundColor: ASSET_CLASS_COLORS[c.assetClass],
+                          }}
+                        />
+                        {c.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
+                      {formatPct(c.targetPct)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                      {formatPct(c.actualPct)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-md px-2 py-0.5 text-xs font-semibold",
+                          c.diffPct < -0.5
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                            : c.diffPct > 0.5
+                              ? "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
+                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        )}
+                      >
+                        {c.diffPct > 0 ? "+" : ""}
+                        {formatPct(c.diffPct)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-slate-800 tabular-nums dark:text-slate-200">
+                      {maskBRL(c.currentValueBRL, isPrivate)}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-5 py-3.5 text-right font-mono font-semibold tabular-nums",
+                        underTarget
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      )}
+                    >
+                      {isPrivate
+                        ? maskBRL(c.balanceNeededBRL, true)
+                        : `${underTarget ? "+" : ""}${formatBRL(c.balanceNeededBRL)}`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

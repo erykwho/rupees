@@ -14,13 +14,22 @@ import {
   X,
 } from "lucide-react";
 import {
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import {
   ALL_ASSET_CLASSES,
   ASSET_CLASS_LABELS,
+  INVESTMENT_CLASSES,
   type AssetClassKey,
   type AssetSummary,
   FIXED_INCOME_INDEXES,
   FIXED_INCOME_INDEX_LABELS,
   type FixedIncomeIndexKey,
+  type InvestmentClassKey,
   type PortfolioSummary,
   type PriceModeKey,
   formatBRL,
@@ -30,8 +39,28 @@ import {
   isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
+import { useTheme } from "@/components/theme-provider";
 import { maskBRL, maskQty } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
+
+const SECTOR_PALETTE = [
+  "#059669",
+  "#0284c7",
+  "#2563eb",
+  "#d97706",
+  "#0f766e",
+  "#4f46e5",
+  "#db2777",
+  "#65a30d",
+  "#0891b2",
+  "#ea580c",
+  "#64748b",
+  "#10b981",
+];
+
+const SECTOR_CLASSES: InvestmentClassKey[] = INVESTMENT_CLASSES.filter(
+  (c) => c !== "FIXED_INCOME"
+);
 
 interface PortfolioManagerProps {
   initialSummary: PortfolioSummary;
@@ -67,13 +96,66 @@ const EMPTY_FORM: AssetFormState = {
 };
 
 export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
+  const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
+  const isDark = theme === "dark";
+
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [selectedClass, setSelectedClass] = useState<AssetClassKey | "ALL">(
     "ALL"
   );
+  const [selectedSectorClass, setSelectedSectorClass] =
+    useState<InvestmentClassKey>("BR_STOCK");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+
+  function handleSelectClass(cls: AssetClassKey | "ALL") {
+    setSelectedClass(cls);
+    if (cls !== "ALL" && SECTOR_CLASSES.includes(cls as InvestmentClassKey)) {
+      setSelectedSectorClass(cls as InvestmentClassKey);
+    }
+  }
+
+  const sectorRows = useMemo(
+    () =>
+      summary.sectors
+        .filter(
+          (s) =>
+            s.assetClass === selectedSectorClass &&
+            (s.currentValueBRL > 0 ||
+              (s.goalTargetPct ?? 0) > 0 ||
+              s.targetPctInClass > 0)
+        )
+        .map((s) => ({
+          name: s.sector,
+          value: Number(s.currentValueBRL.toFixed(2)),
+          pct: Number(s.actualPctInClass.toFixed(1)),
+          goalPct: s.goalTargetPct,
+          status: s.status,
+        })),
+    [summary.sectors, selectedSectorClass]
+  );
+
+  const sectorPieData = useMemo(
+    () => sectorRows.filter((s) => s.value > 0),
+    [sectorRows]
+  );
+
+  const tooltipContentStyle = isDark
+    ? {
+        borderRadius: "12px",
+        border: "1px solid #1e293b",
+        backgroundColor: "#0f172a",
+        color: "#f1f5f9",
+        fontSize: "12px",
+      }
+    : {
+        borderRadius: "12px",
+        border: "1px solid #e2e8f0",
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+        fontSize: "12px",
+      };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<AssetFormState>(EMPTY_FORM);
@@ -473,7 +555,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => setSelectedClass("ALL")}
+            onClick={() => handleSelectClass("ALL")}
             className={cn(
               "rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
               selectedClass === "ALL"
@@ -487,7 +569,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             <button
               key={cls}
               type="button"
-              onClick={() => setSelectedClass(cls)}
+              onClick={() => handleSelectClass(cls)}
               className={cn(
                 "rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
                 selectedClass === cls
@@ -679,6 +761,130 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
           </table>
         </div>
       </div>
+
+      {/* Sector Allocation Chart */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Alocação por Setor
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Concentração setorial dentro da classe
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SECTOR_CLASSES.map((cls) => (
+              <button
+                key={cls}
+                type="button"
+                onClick={() => setSelectedSectorClass(cls)}
+                className={cn(
+                  "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
+                  selectedSectorClass === cls
+                    ? "bg-emerald-600 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                )}
+              >
+                {ASSET_CLASS_LABELS[cls]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {sectorRows.length === 0 ? (
+          <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
+            Nenhum valor investido ou meta de setor nesta classe ainda.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+            <div className="h-56 w-full">
+              {sectorPieData.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 px-4 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                  Nenhum valor investido nesta classe ainda.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sectorPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={48}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke={isDark ? "#0f172a" : "#ffffff"}
+                    >
+                      {sectorPieData.map((entry, idx) => (
+                        <Cell
+                          key={entry.name}
+                          fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => maskBRL(Number(value), isPrivate)}
+                      contentStyle={tooltipContentStyle}
+                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+              {sectorRows.map((s) => {
+                const pieIdx = sectorPieData.findIndex(
+                  (p) => p.name === s.name
+                );
+                return (
+                  <div
+                    key={s.name}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          pieIdx < 0 &&
+                            "border border-dashed border-slate-400 bg-transparent dark:border-slate-500"
+                        )}
+                        style={
+                          pieIdx >= 0
+                            ? {
+                                backgroundColor:
+                                  SECTOR_PALETTE[
+                                    pieIdx % SECTOR_PALETTE.length
+                                  ],
+                              }
+                            : undefined
+                        }
+                      />
+                      <span className="truncate">{s.name}</span>
+                      {s.status === "UNCOVERED" && (
+                        <span className="shrink-0 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          Sem ativos
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-right font-mono tabular-nums">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        {formatPct(s.pct)}
+                      </span>
+                      {s.goalPct !== null && (
+                        <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                          / alvo {formatPct(s.goalPct, 0)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Create / Edit Asset Modal */}
       {modalOpen && (
