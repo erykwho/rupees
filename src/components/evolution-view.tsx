@@ -36,6 +36,7 @@ import {
   INVESTMENT_CLASSES,
   formatBRL,
   formatPct,
+  isFixedIncomeClass,
 } from "@/lib/domain/types";
 import {
   type AggregatedContributionPoint,
@@ -94,6 +95,7 @@ interface EvolutionTooltipProps {
   activeClasses?: AssetClassKey[];
   chartMode?: EvolutionChartMode;
   isPrivate?: boolean;
+  showsEstimatedFixedIncome?: boolean;
 }
 
 function EvolutionTooltip({
@@ -103,6 +105,7 @@ function EvolutionTooltip({
   activeClasses = [],
   chartMode = "PATRIMONIO",
   isPrivate = false,
+  showsEstimatedFixedIncome = false,
 }: EvolutionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const pt = payload[0]?.payload;
@@ -196,6 +199,11 @@ function EvolutionTooltip({
           <span>Dólar (USDBRL)</span>
           <span>{formatBRL(pt.usdBrl)}</span>
         </div>
+        {showsEstimatedFixedIncome && (
+          <p className="pt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+            Renda Fixa/Reserva com ganho estimado líquido de IR
+          </p>
+        )}
       </div>
     </div>
   );
@@ -374,6 +382,10 @@ export function EvolutionView({
 
   const { kpis, evolutionSeries, contributionSeries, activeClasses } =
     aggregated;
+
+  const showsEstimatedFixedIncome =
+    Boolean(data.hasEstimatedFixedIncome) &&
+    activeClasses.some((cls) => isFixedIncomeClass(cls));
 
   const selectionDescription = useMemo(() => {
     if (isTotalSelected) {
@@ -734,6 +746,8 @@ export function EvolutionView({
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Visão {granularity === "DAILY" ? "diária" : "mensal"} ·{" "}
                   {selectionDescription}
+                  {showsEstimatedFixedIncome &&
+                    " · Renda Fixa com ganho estimado líquido de IR"}
                 </p>
               </div>
 
@@ -879,6 +893,7 @@ export function EvolutionView({
                             activeClasses={activeClasses}
                             chartMode={chartMode}
                             isPrivate={isPrivate}
+                            showsEstimatedFixedIncome={showsEstimatedFixedIncome}
                           />
                         }
                       />

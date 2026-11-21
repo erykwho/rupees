@@ -324,3 +324,293 @@ describe("aggregateEvolutionView", () => {
     expect(ytd.evolutionSeries[0].date >= "2026-01-01").toBe(true);
   });
 });
+
+describe("computePortfolioEvolution — estimated fixed income (net of IR)", () => {
+  const defaultRates = {
+    selicAnnualPct: { "2025-01-01": 10 },
+    cdiAnnualPct: { "2025-01-01": 10 },
+    ipcaMonthlyPct: { "2025-01": 1.0 },
+    fallback: { selic: 10, cdi: 10, ipca: 5 },
+  };
+
+  it("accrues daily net-of-IR yield for configured FIXED_INCOME and EMERGENCY_RESERVE and respects taxExempt", () => {
+    const assets: AssetInput[] = [
+      {
+        id: "cdb",
+        ticker: "CDB 100%",
+        assetClass: "FIXED_INCOME",
+        sector: "Renda Fixa",
+        currency: "BRL",
+        targetPctInClass: 50,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "CDI_PCT",
+        fixedIncomeRate: 100,
+        taxExempt: false,
+      },
+      {
+        id: "lci",
+        ticker: "LCI 100%",
+        assetClass: "FIXED_INCOME",
+        sector: "Renda Fixa",
+        currency: "BRL",
+        targetPctInClass: 50,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "CDI_PCT",
+        fixedIncomeRate: 100,
+        taxExempt: true,
+      },
+      {
+        id: "selic",
+        ticker: "SELIC",
+        assetClass: "EMERGENCY_RESERVE",
+        sector: "Reserva",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "SELIC_PCT",
+        fixedIncomeRate: 100,
+        taxExempt: false,
+      },
+    ];
+
+    const transactions: TransactionInput[] = [
+      {
+        id: "t1",
+        assetId: "cdb",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+      {
+        id: "t2",
+        assetId: "lci",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+      {
+        id: "t3",
+        assetId: "selic",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+    ];
+
+    // Exactly 365 days later: 2026-01-01
+    // At 10% a.a. for 365 days:
+    // - LCI (taxExempt): gross = 1100, net = 1100 (+100)
+    // - CDB (365 days -> 17.5% IR): gross gain = 100, net gain = 82.50 -> 1082.50
+    // - SELIC (365 days -> 17.5% IR): net = 1082.50
+    const evo = computePortfolioEvolution({
+      assets,
+      transactions,
+      historicalPrices: {},
+      currentQuotes: {},
+      currentUsdBrl: 5.5,
+      todayISO: "2026-01-01",
+      fixedIncomeRates: defaultRates,
+    });
+
+    expect(evo.hasEstimatedFixedIncome).toBe(true);
+
+    // Day 0: zero gain
+    expect(evo.points[0].byClass.FIXED_INCOME.marketValueBRL).toBe(2000);
+    expect(evo.points[0].byClass.EMERGENCY_RESERVE.marketValueBRL).toBe(1000);
+
+    // Final day (365 days elapsed):
+    const last = evo.points[evo.points.length - 1];
+    expect(last.date).toBe("2026-01-01");
+    expect(last.byClass.FIXED_INCOME.investedCostBRL).toBe(2000);
+    expect(last.byClass.FIXED_INCOME.marketValueBRL).toBeCloseTo(2182.5, 1);
+    expect(last.byClass.EMERGENCY_RESERVE.investedCostBRL).toBe(1000);
+    expect(last.byClass.EMERGENCY_RESERVE.marketValueBRL).toBeCloseTo(1082.5, 1);
+
+    // Aggregated KPIs and Rentabilidade (%) reflect the estimated net gain
+    const agg = aggregateEvolutionView(evo.points, {
+      selectedClasses: ["FIXED_INCOME"],
+      includeReserve: false,
+      range: "ALL",
+      granularity: "MONTHLY",
+      contributionGrouping: "MONTHLY",
+    });
+    expect(agg.kpis.totalProfitLossBRL).toBeCloseTo(182.5, 1);
+    expect(agg.kpis.totalProfitLossPct).toBeCloseTo(9.13, 1);
+  });
+
+  it("anchors balance on BALANCE_ADJUSTMENT without duplicating gain and resumes accruing afterward", () => {
+    const assets: AssetInput[] = [
+      {
+        id: "cdb",
+        ticker: "CDB",
+        assetClass: "FIXED_INCOME",
+        sector: "Renda Fixa",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "PREFIXED",
+        fixedIncomeRate: 12,
+        taxExempt: true,
+      },
+    ];
+
+    const transactions: TransactionInput[] = [
+      {
+        id: "t1",
+        assetId: "cdb",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+      // After 30 days, user records exact real yield of +25 -> real balance = 1025
+      {
+        id: "t2",
+        assetId: "cdb",
+        date: "2025-01-31",
+        type: "BALANCE_ADJUSTMENT",
+        quantity: 25,
+        unitPrice: 1,
+        totalAmount: 25,
+      },
+    ];
+
+    const evo = computePortfolioEvolution({
+      assets,
+      transactions,
+      historicalPrices: {},
+      currentQuotes: {},
+      currentUsdBrl: 5.5,
+      todayISO: "2025-03-02", // 30 days after anchor
+      fixedIncomeRates: defaultRates,
+    });
+
+    const anchorPoint = evo.points.find((p) => p.date === "2025-01-31")!;
+    expect(anchorPoint.byClass.FIXED_INCOME.marketValueBRL).toBe(1025);
+    expect(anchorPoint.byClass.FIXED_INCOME.investedCostBRL).toBe(1000);
+
+    // 30 days after anchor: 1025 * (1.12)^(30/365) ~= 1034.59
+    const last = evo.points[evo.points.length - 1];
+    expect(last.date).toBe("2025-03-02");
+    expect(last.byClass.FIXED_INCOME.marketValueBRL).toBeCloseTo(1034.59, 1);
+    expect(last.byClass.FIXED_INCOME.investedCostBRL).toBe(1000);
+  });
+
+  it("freezes accrual after maturityDate and supports per-lot rate override and FIFO sells", () => {
+    const assets: AssetInput[] = [
+      {
+        id: "pre",
+        ticker: "TESOURO PRE",
+        assetClass: "FIXED_INCOME",
+        sector: "Tesouro",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "PREFIXED",
+        fixedIncomeRate: 10,
+        maturityDate: "2025-07-01",
+        taxExempt: true,
+      },
+    ];
+
+    const transactions: TransactionInput[] = [
+      {
+        id: "t1",
+        assetId: "pre",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+        fixedIncomeRate: 20, // Lot-specific override
+      },
+    ];
+
+    const evo = computePortfolioEvolution({
+      assets,
+      transactions,
+      historicalPrices: {},
+      currentQuotes: {},
+      currentUsdBrl: 5.5,
+      todayISO: "2025-12-31",
+      fixedIncomeRates: defaultRates,
+    });
+
+    const atMaturity = evo.points.find((p) => p.date === "2025-07-01")!;
+    const afterMaturity = evo.points[evo.points.length - 1];
+
+    // Accrued at 20% a.a. for 181 days (~9.46% -> ~1094.6), then frozen until Dec 31
+    expect(atMaturity.byClass.FIXED_INCOME.marketValueBRL).toBeGreaterThan(1090);
+    expect(afterMaturity.byClass.FIXED_INCOME.marketValueBRL).toBe(
+      atMaturity.byClass.FIXED_INCOME.marketValueBRL
+    );
+  });
+
+  it("applies historical monthly IPCA for IPCA_PLUS assets", () => {
+    const assets: AssetInput[] = [
+      {
+        id: "ipca",
+        ticker: "IPCA+ 6%",
+        assetClass: "FIXED_INCOME",
+        sector: "Tesouro",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "IPCA_PLUS",
+        fixedIncomeRate: 0, // Pure IPCA test
+        taxExempt: true,
+      },
+    ];
+
+    const transactions: TransactionInput[] = [
+      {
+        id: "t1",
+        assetId: "ipca",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+    ];
+
+    // January 2025 has 31 days with 1.0% monthly IPCA -> by 2025-02-01 (31 days elapsed, 30 days in Jan + 1 day in Feb)
+    const evo = computePortfolioEvolution({
+      assets,
+      transactions,
+      historicalPrices: {},
+      currentQuotes: {},
+      currentUsdBrl: 5.5,
+      todayISO: "2025-01-31", // 30 days elapsed in Jan (30/31 of 1%)
+      fixedIncomeRates: {
+        selicAnnualPct: {},
+        cdiAnnualPct: {},
+        ipcaMonthlyPct: { "2025-01": 1.0 },
+        fallback: { selic: 10, cdi: 10, ipca: 5 },
+      },
+    });
+
+    const jan31 = evo.points[evo.points.length - 1];
+    // 1000 * (1.01)^(30/31) ~= 1009.68
+    expect(jan31.byClass.FIXED_INCOME.marketValueBRL).toBeCloseTo(1009.68, 1);
+  });
+});
