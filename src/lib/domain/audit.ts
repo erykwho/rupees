@@ -2,6 +2,8 @@ import {
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   type CurrencyCode,
+  FIXED_INCOME_INDEX_LABELS,
+  type FixedIncomeIndexKey,
   type PriceModeKey,
   type TransactionTypeKey,
   formatCurrency,
@@ -48,6 +50,7 @@ export interface TransactionSnapshot {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
+  fixedIncomeRate?: number | null;
   notes: string | null;
 }
 
@@ -61,6 +64,10 @@ export interface AssetSnapshot {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  fixedIncomeIndex?: FixedIncomeIndexKey | null;
+  fixedIncomeRate?: number | null;
+  maturityDate?: string | null;
+  taxExempt?: boolean;
   cascadeTransactions?: TransactionSnapshot[];
 }
 
@@ -231,6 +238,38 @@ export function computeAuditDiffs(
       before?.isActive === after?.isActive,
       before ? (before.isActive ? "Ativo" : "Inativo") : null,
       after ? (after.isActive ? "Ativo" : "Inativo") : null
+    );
+    pushIfChanged(
+      "fixedIncomeIndex",
+      "Indexador",
+      (before?.fixedIncomeIndex ?? null) === (after?.fixedIncomeIndex ?? null),
+      before?.fixedIncomeIndex
+        ? FIXED_INCOME_INDEX_LABELS[before.fixedIncomeIndex]
+        : null,
+      after?.fixedIncomeIndex
+        ? FIXED_INCOME_INDEX_LABELS[after.fixedIncomeIndex]
+        : null
+    );
+    pushIfChanged(
+      "fixedIncomeRate",
+      "Taxa padrão",
+      numbersEqual(before?.fixedIncomeRate ?? null, after?.fixedIncomeRate ?? null),
+      before?.fixedIncomeRate != null ? formatPct(before.fixedIncomeRate, 2) : null,
+      after?.fixedIncomeRate != null ? formatPct(after.fixedIncomeRate, 2) : null
+    );
+    pushIfChanged(
+      "maturityDate",
+      "Vencimento",
+      (before?.maturityDate ?? null) === (after?.maturityDate ?? null),
+      before?.maturityDate ?? null,
+      after?.maturityDate ?? null
+    );
+    pushIfChanged(
+      "taxExempt",
+      "Isento de IR",
+      Boolean(before?.taxExempt) === Boolean(after?.taxExempt),
+      before ? (before.taxExempt ? "Sim" : "Não") : null,
+      after ? (after.taxExempt ? "Sim" : "Não") : null
     );
 
     const beforeCascade = before?.cascadeTransactions?.length ?? 0;

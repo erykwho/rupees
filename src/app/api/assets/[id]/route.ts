@@ -10,7 +10,7 @@ import {
 } from "@/lib/audit-service";
 
 const updateAssetSchema = z.object({
-  ticker: z.string().trim().min(1).max(20).optional(),
+  ticker: z.string().trim().min(1).max(30).optional(),
   assetClass: z
     .enum([
       "FIXED_INCOME",
@@ -26,7 +26,30 @@ const updateAssetSchema = z.object({
   priceMode: z.enum(["AUTO_YAHOO", "MANUAL"]).optional(),
   manualPrice: z.coerce.number().positive().nullable().optional(),
   isActive: z.boolean().optional(),
+  fixedIncomeIndex: z
+    .enum([
+      "CDI_PCT",
+      "CDI_PLUS",
+      "SELIC_PCT",
+      "SELIC_PLUS",
+      "IPCA_PLUS",
+      "PREFIXED",
+    ])
+    .nullable()
+    .optional(),
+  fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
+  maturityDate: z.string().trim().nullable().optional(),
+  taxExempt: z.boolean().optional(),
 });
+
+function parseOptionalMaturityDate(raw: string | null | undefined): Date | null | undefined {
+  if (raw === undefined) return undefined;
+  if (!raw) return null;
+  const parsed = new Date(
+    raw.includes("T") ? raw : `${raw.slice(0, 10)}T12:00:00.000Z`
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 export async function PATCH(
   request: Request,
@@ -57,6 +80,8 @@ export async function PATCH(
     const nextClass = parsed.data.assetClass ?? existing.assetClass;
     const nextCurrency =
       nextClass === "US_STOCK" || nextClass === "US_REIT" ? "USD" : "BRL";
+    const isFixedIncome =
+      nextClass === "FIXED_INCOME" || nextClass === "EMERGENCY_RESERVE";
 
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.asset.update({
@@ -70,6 +95,12 @@ export async function PATCH(
           priceMode: parsed.data.priceMode,
           manualPrice: parsed.data.manualPrice,
           isActive: parsed.data.isActive,
+          fixedIncomeIndex: isFixedIncome ? parsed.data.fixedIncomeIndex : null,
+          fixedIncomeRate: isFixedIncome ? parsed.data.fixedIncomeRate : null,
+          maturityDate: isFixedIncome
+            ? parseOptionalMaturityDate(parsed.data.maturityDate)
+            : null,
+          taxExempt: isFixedIncome ? parsed.data.taxExempt : false,
         },
       });
 

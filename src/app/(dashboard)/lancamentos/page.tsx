@@ -30,6 +30,8 @@ export default async function LancamentosPage(props: {
             assetClass: true,
             currency: true,
             sector: true,
+            fixedIncomeIndex: true,
+            fixedIncomeRate: true,
           },
         },
       },
@@ -43,6 +45,8 @@ export default async function LancamentosPage(props: {
         ticker: true,
         assetClass: true,
         currency: true,
+        fixedIncomeIndex: true,
+        fixedIncomeRate: true,
       },
     }),
   ]);
@@ -55,6 +59,8 @@ export default async function LancamentosPage(props: {
     quantity: Number(t.quantity),
     unitPrice: Number(t.unitPrice),
     totalAmount: Number(t.totalAmount),
+    fixedIncomeRate:
+      t.fixedIncomeRate !== null ? Number(t.fixedIncomeRate) : null,
     notes: t.notes,
     asset: {
       id: t.asset.id,
@@ -62,6 +68,11 @@ export default async function LancamentosPage(props: {
       assetClass: t.asset.assetClass as AssetClassKey,
       currency: t.asset.currency as CurrencyCode,
       sector: t.asset.sector,
+      fixedIncomeIndex: t.asset.fixedIncomeIndex ?? null,
+      fixedIncomeRate:
+        t.asset.fixedIncomeRate !== null
+          ? Number(t.asset.fixedIncomeRate)
+          : null,
     },
   }));
 
@@ -70,6 +81,9 @@ export default async function LancamentosPage(props: {
     ticker: a.ticker,
     assetClass: a.assetClass as AssetClassKey,
     currency: a.currency as CurrencyCode,
+    fixedIncomeIndex: a.fixedIncomeIndex ?? null,
+    fixedIncomeRate:
+      a.fixedIncomeRate !== null ? Number(a.fixedIncomeRate) : null,
   }));
 
   return (

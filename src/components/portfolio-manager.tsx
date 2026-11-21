@@ -16,11 +16,15 @@ import {
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   type AssetSummary,
+  FIXED_INCOME_INDEXES,
+  FIXED_INCOME_INDEX_LABELS,
+  type FixedIncomeIndexKey,
   type PortfolioSummary,
   type PriceModeKey,
   formatBRL,
   formatCurrency,
   formatPct,
+  isFixedIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskBRL, maskQty } from "@/lib/privacy";
@@ -39,6 +43,10 @@ interface AssetFormState {
   priceMode: PriceModeKey;
   manualPrice: string;
   isActive: boolean;
+  fixedIncomeIndex: FixedIncomeIndexKey | "";
+  fixedIncomeRate: string;
+  maturityDate: string;
+  taxExempt: boolean;
 }
 
 const EMPTY_FORM: AssetFormState = {
@@ -49,6 +57,10 @@ const EMPTY_FORM: AssetFormState = {
   priceMode: "AUTO_YAHOO",
   manualPrice: "",
   isActive: true,
+  fixedIncomeIndex: "",
+  fixedIncomeRate: "",
+  maturityDate: "",
+  taxExempt: false,
 };
 
 export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
@@ -106,9 +118,13 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
   function openCreateModal() {
     setError(null);
+    const defaultClass = selectedClass === "ALL" ? "BR_STOCK" : selectedClass;
+    const isFixed = isFixedIncomeClass(defaultClass);
     setForm({
       ...EMPTY_FORM,
-      assetClass: selectedClass === "ALL" ? "BR_STOCK" : selectedClass,
+      assetClass: defaultClass,
+      priceMode: isFixed ? "MANUAL" : "AUTO_YAHOO",
+      manualPrice: isFixed ? "1" : "",
     });
     setModalOpen(true);
   }
@@ -124,6 +140,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       priceMode: asset.priceMode,
       manualPrice: asset.manualPrice !== null ? String(asset.manualPrice) : "",
       isActive: asset.isActive,
+      fixedIncomeIndex: asset.fixedIncomeIndex ?? "",
+      fixedIncomeRate:
+        asset.fixedIncomeRate !== null ? String(asset.fixedIncomeRate) : "",
+      maturityDate: asset.maturityDate ?? "",
+      taxExempt: asset.taxExempt,
     });
     setModalOpen(true);
   }
@@ -134,6 +155,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     setError(null);
 
     try {
+      const isFixed = isFixedIncomeClass(form.assetClass);
+      const parsedFiRate = form.fixedIncomeRate.trim()
+        ? Number(form.fixedIncomeRate.replace(",", "."))
+        : null;
+
       const payload = {
         ticker: form.ticker.trim().toUpperCase(),
         assetClass: form.assetClass,
@@ -145,6 +171,14 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             ? Number(form.manualPrice.replace(",", "."))
             : null,
         isActive: form.isActive,
+        fixedIncomeIndex:
+          isFixed && form.fixedIncomeIndex ? form.fixedIncomeIndex : null,
+        fixedIncomeRate:
+          isFixed && parsedFiRate !== null && Number.isFinite(parsedFiRate)
+            ? parsedFiRate
+            : null,
+        maturityDate: isFixed && form.maturityDate ? form.maturityDate : null,
+        taxExempt: isFixed ? form.taxExempt : false,
       };
 
       const url = form.id ? `/api/assets/${form.id}` : "/api/assets";
@@ -628,6 +662,79 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                     placeholder="1.00"
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
+                </div>
+              )}
+
+              {isFixedIncomeClass(form.assetClass) && (
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/40">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Rentabilidade Esperada (Renda Fixa)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Indexador
+                      </label>
+                      <select
+                        value={form.fixedIncomeIndex}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            fixedIncomeIndex: e.target.value as
+                              | FixedIncomeIndexKey
+                              | "",
+                          })
+                        }
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      >
+                        <option value="">Não configurado</option>
+                        {FIXED_INCOME_INDEXES.map((idx) => (
+                          <option key={idx} value={idx}>
+                            {FIXED_INCOME_INDEX_LABELS[idx]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Taxa padrão (%)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={form.fixedIncomeRate}
+                        onChange={(e) =>
+                          setForm({ ...form, fixedIncomeRate: e.target.value })
+                        }
+                        placeholder="Ex: 100 ou 6,5"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Vencimento (opcional)
+                    </label>
+                    <input
+                      type="date"
+                      value={form.maturityDate}
+                      onChange={(e) =>
+                        setForm({ ...form, maturityDate: e.target.value })
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={form.taxExempt}
+                      onChange={(e) =>
+                        setForm({ ...form, taxExempt: e.target.checked })
+                      }
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
+                    />
+                    Isento de Imposto de Renda (LCI, LCA, CRI, CRA)
+                  </label>
                 </div>
               )}
 
