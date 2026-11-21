@@ -104,3 +104,21 @@ model QuoteCache {
   currency  String   @default("BRL")
   updatedAt DateTime @updatedAt
 }
+
+model HistoricalQuoteCache {
+  symbol     String
+  date       String   // Formato "YYYY-MM-DD"
+  closePrice Decimal  @db.Decimal(18, 6)
+  currency   String   @default("BRL")
+  updatedAt  DateTime @updatedAt
+
+  @@id([symbol, date])
+  @@index([date])
+}
+
+model HistoricalQuoteSync {
+  symbol      String   @id
+  coveredFrom String   // Formato "YYYY-MM-DD"
+  coveredTo   String   // Formato "YYYY-MM-DD"
+  updatedAt   DateTime @updatedAt
+}
