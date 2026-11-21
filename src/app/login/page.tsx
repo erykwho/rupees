@@ -1,5 +1,6 @@
 import { signIn } from "@/lib/auth";
 import { ShieldCheck } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function LoginPage(props: {
   searchParams: Promise<{ error?: string }>;
@@ -13,8 +14,12 @@ export default async function LoginPage(props: {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#f6f7f9] px-4 py-12">
-      <div className="w-full max-w-sm rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm">
+    <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#f6f7f9] px-4 py-12 dark:bg-slate-950">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle className="h-9 w-9 rounded-xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900" />
+      </div>
+
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 shadow-md shadow-emerald-600/20">
             <svg viewBox="0 0 32 32" className="h-8 w-8" fill="none">
@@ -26,16 +31,16 @@ export default async function LoginPage(props: {
               <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#047857" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Rupees
           </h1>
-          <p className="mt-1.5 text-sm text-slate-500">
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             Controle pessoal de investimentos — B3, EUA e Renda Fixa.
           </p>
         </div>
 
         {error && (
-          <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">
+          <div className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300">
             {error === "AccessDenied"
               ? "Acesso negado. Sua conta Google não está na lista de e-mails autorizados."
               : "Não foi possível completar o login. Tente novamente."}
@@ -45,7 +50,7 @@ export default async function LoginPage(props: {
         <form action={handleGoogleSignIn}>
           <button
             type="submit"
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-xs transition-all hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99]"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-xs transition-all hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600 dark:hover:bg-slate-700/80"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -69,8 +74,8 @@ export default async function LoginPage(props: {
           </button>
         </form>
 
-        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
-          <ShieldCheck className="h-4 w-4 text-emerald-600" />
+        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
           <span>Acesso restrito a contas autorizadas</span>
         </div>
       </div>
