@@ -106,6 +106,7 @@ export function computePortfolioSummary(params: {
   quotes: Record<string, QuoteMapEntry>;
   usdBrl: number;
   usdBrlUpdatedAt?: string | null;
+  estimatedFixedIncomeValues?: Record<string, number>;
 }): PortfolioSummary {
   const {
     assets,
@@ -115,6 +116,7 @@ export function computePortfolioSummary(params: {
     quotes,
     usdBrl,
     usdBrlUpdatedAt = null,
+    estimatedFixedIncomeValues,
   } = params;
 
   const derivedTargets = computeDerivedClassTargets(goal);
@@ -149,8 +151,25 @@ export function computePortfolioSummary(params: {
     }
 
     const fxRate = asset.currency === "USD" ? usdBrl : 1;
-    const currentPriceBRL = currentPriceNative * fxRate;
-    const currentValueBRL = pos.quantity * currentPriceBRL;
+    const basePriceBRL = currentPriceNative * fxRate;
+    const estimatedVal = estimatedFixedIncomeValues?.[asset.id];
+    const hasEstimatedValue =
+      typeof estimatedVal === "number" &&
+      Number.isFinite(estimatedVal) &&
+      pos.quantity > EPSILON;
+
+    const currentValueBRL = hasEstimatedValue
+      ? round2(estimatedVal)
+      : pos.quantity * basePriceBRL;
+    const currentPriceBRL =
+      hasEstimatedValue && pos.quantity > EPSILON
+        ? currentValueBRL / pos.quantity
+        : basePriceBRL;
+    const effectivePriceNative =
+      hasEstimatedValue && fxRate > EPSILON
+        ? currentPriceBRL / fxRate
+        : currentPriceNative;
+
     const investedCostBRL = pos.investedCost * fxRate;
     const profitLossBRL = currentValueBRL - investedCostBRL;
     const profitLossPct =
@@ -164,7 +183,7 @@ export function computePortfolioSummary(params: {
     return {
       asset,
       pos,
-      currentPriceNative,
+      currentPriceNative: effectivePriceNative,
       currentPriceBRL,
       currentValueBRL,
       investedCostBRL,
