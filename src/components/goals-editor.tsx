@@ -116,10 +116,10 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Objetivos
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
             Ajuste os percentuais hierárquicos da carteira. Cada nível soma
             automaticamente 100%.
           </p>
@@ -137,14 +137,14 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300">
           {error}
         </div>
       )}
 
       {saved && (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           Objetivos salvos com sucesso! O dashboard e o plano de aporte já
           refletem os novos percentuais.
         </div>
@@ -158,14 +158,18 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
           return (
             <section
               key={pair.title}
-              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs"
+              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900"
             >
-              <h2 className="text-sm font-bold text-slate-900">{pair.title}</h2>
-              <p className="mt-0.5 text-xs text-slate-500">{pair.subtitle}</p>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                {pair.title}
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                {pair.subtitle}
+              </p>
 
               <div className="mt-4 flex items-center justify-between gap-4">
                 <div>
-                  <span className="text-xs font-semibold text-slate-500">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                     {pair.leftLabel}
                   </span>
                   <div className="mt-1 flex items-center gap-1">
@@ -182,14 +186,16 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
                           Number(e.target.value)
                         )
                       }
-                      className="w-20 rounded-lg border border-slate-200 px-2.5 py-1 font-mono text-base font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                      className="w-20 rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-base font-bold text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
-                    <span className="text-sm font-semibold text-slate-400">%</span>
+                    <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">
+                      %
+                    </span>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-xs font-semibold text-slate-500">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                     {pair.rightLabel}
                   </span>
                   <div className="mt-1 flex items-center justify-end gap-1">
@@ -206,9 +212,11 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
                           100 - Number(e.target.value)
                         )
                       }
-                      className="w-20 rounded-lg border border-slate-200 px-2.5 py-1 text-right font-mono text-base font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+                      className="w-20 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-right font-mono text-base font-bold text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
-                    <span className="text-sm font-semibold text-slate-400">%</span>
+                    <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">
+                      %
+                    </span>
                   </div>
                 </div>
               </div>
@@ -234,11 +242,11 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
       </div>
 
       {/* Derived Final Percentages Preview */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-        <h2 className="text-base font-bold text-slate-900">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
           Resultado Final por Classe
         </h2>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
           Percentual efetivo de cada classe na carteira com os ajustes acima
         </p>
 
@@ -249,21 +257,21 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
             return (
               <div
                 key={cls}
-                className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5"
+                className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-800/50"
               >
                 <div className="flex items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
                   />
-                  <span className="text-xs font-semibold text-slate-700">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     {ASSET_CLASS_LABELS[cls]}
                   </span>
                 </div>
-                <p className="mt-2 font-mono text-xl font-bold text-slate-900 tabular-nums">
+                <p className="mt-2 font-mono text-xl font-bold text-slate-900 tabular-nums dark:text-slate-100">
                   {formatPct(target)}
                 </p>
-                <p className="mt-0.5 font-mono text-[11px] text-slate-500 tabular-nums">
+                <p className="mt-0.5 font-mono text-[11px] text-slate-500 tabular-nums dark:text-slate-400">
                   Atual: {formatPct(actual)}
                 </p>
               </div>

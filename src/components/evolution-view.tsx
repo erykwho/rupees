@@ -45,6 +45,7 @@ import {
   aggregateEvolutionView,
   formatDateFullPTBR,
 } from "@/lib/domain/evolution";
+import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 const RANGE_OPTIONS: Array<{ value: EvolutionRange; label: string }> = [
@@ -93,35 +94,37 @@ function EvolutionTooltip({ active, payload }: EvolutionTooltipProps) {
   const isPositive = pt.profitLossBRL >= 0;
 
   return (
-    <div className="min-w-[210px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs">
-      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800">
+    <div className="min-w-[210px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
         {pt.tooltipLabel}
       </p>
       <div className="space-y-1.5 tabular-nums">
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-600">
+          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
             <span className="h-2 w-2 rounded-full bg-emerald-600" />
             Patrimônio
           </span>
-          <span className="font-semibold text-slate-900">
+          <span className="font-semibold text-slate-900 dark:text-slate-100">
             {formatBRL(pt.marketValueBRL)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-600">
+          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
             <span className="h-2 w-2 rounded-full bg-slate-400" />
             Aportado
           </span>
-          <span className="font-medium text-slate-700">
+          <span className="font-medium text-slate-700 dark:text-slate-300">
             {formatBRL(pt.investedCostBRL)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5">
-          <span className="text-slate-600">Rendimento</span>
+        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 dark:border-slate-800">
+          <span className="text-slate-600 dark:text-slate-400">Rendimento</span>
           <span
             className={cn(
               "font-semibold",
-              isPositive ? "text-emerald-700" : "text-rose-600"
+              isPositive
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-rose-600 dark:text-rose-400"
             )}
           >
             {isPositive ? "+" : ""}
@@ -129,7 +132,7 @@ function EvolutionTooltip({ active, payload }: EvolutionTooltipProps) {
             {formatPct(pt.profitLossPct, 1)})
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400">
+        <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400 dark:text-slate-500">
           <span>Dólar (USDBRL)</span>
           <span>{formatBRL(pt.usdBrl)}</span>
         </div>
@@ -158,13 +161,15 @@ function ContributionTooltip({
   );
 
   return (
-    <div className="min-w-[200px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs">
-      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800">
+    <div className="min-w-[200px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
         {row.tooltipLabel}
       </p>
       <div className="space-y-1 tabular-nums">
         {nonZeroClasses.length === 0 ? (
-          <p className="text-slate-400">Sem movimentação no período</p>
+          <p className="text-slate-400 dark:text-slate-500">
+            Sem movimentação no período
+          </p>
         ) : (
           nonZeroClasses.map((cls) => {
             const val = row[cls];
@@ -173,7 +178,7 @@ function ContributionTooltip({
                 key={cls}
                 className="flex items-center justify-between gap-4"
               >
-                <span className="flex items-center gap-1.5 text-slate-600">
+                <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
                   <span
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
@@ -183,7 +188,9 @@ function ContributionTooltip({
                 <span
                   className={cn(
                     "font-medium",
-                    val >= 0 ? "text-slate-900" : "text-rose-600"
+                    val >= 0
+                      ? "text-slate-900 dark:text-slate-100"
+                      : "text-rose-600 dark:text-rose-400"
                   )}
                 >
                   {val >= 0 ? "+" : ""}
@@ -193,11 +200,15 @@ function ContributionTooltip({
             );
           })
         )}
-        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold">
-          <span className="text-slate-700">Total líquido</span>
+        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold dark:border-slate-800">
+          <span className="text-slate-700 dark:text-slate-300">
+            Total líquido
+          </span>
           <span
             className={cn(
-              row.totalBRL >= 0 ? "text-emerald-700" : "text-rose-600"
+              row.totalBRL >= 0
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-rose-600 dark:text-rose-400"
             )}
           >
             {row.totalBRL >= 0 ? "+" : ""}
@@ -214,6 +225,9 @@ interface EvolutionViewProps {
 }
 
 export function EvolutionView({ initialData }: EvolutionViewProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const [data, setData] = useState<EvolutionData>(initialData);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -236,7 +250,6 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
     setSelectedClasses((prev) => {
       const exists = prev.includes(cls);
       const next = exists ? prev.filter((c) => c !== cls) : [...prev, cls];
-      // If all eligible classes are selected, normalize back to "Total" ([])
       if (next.length >= eligibleClasses.length) {
         return [];
       }
@@ -306,23 +319,27 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
   const isGainPositive = gainValue >= 0;
   const isTotalReturnPositive = kpis.totalProfitLossPct >= 0;
 
+  const gridStroke = isDark ? "#1e293b" : "#e2e8f0";
+  const axisTickFill = isDark ? "#94a3b8" : "#64748b";
+  const refLineStroke = isDark ? "#475569" : "#94a3b8";
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Evolução Patrimonial
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
             {data.firstTransactionDate ? (
               <>
                 Histórico diário desde{" "}
-                <span className="font-medium text-slate-700">
+                <span className="font-medium text-slate-700 dark:text-slate-200">
                   {formatDateFullPTBR(data.firstTransactionDate)}
                 </span>{" "}
                 · Dólar:{" "}
-                <span className="font-mono font-semibold text-slate-700 tabular-nums">
+                <span className="font-mono font-semibold text-slate-700 tabular-nums dark:text-slate-200">
                   {formatBRL(data.usdBrl)}
                 </span>
               </>
@@ -337,7 +354,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
@@ -357,12 +374,12 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
 
       {/* Empty State */}
       {data.points.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <TrendingUp className="mx-auto h-10 w-10 text-slate-300" />
-          <h2 className="mt-3 text-base font-semibold text-slate-900">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900">
+          <TrendingUp className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
+          <h2 className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">
             Sem histórico de lançamentos
           </h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
             Registre seus aportes na tela de Lançamentos para visualizar a
             evolução diária e mensal do patrimônio e rendimentos.
           </p>
@@ -377,7 +394,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
       ) : (
         <>
           {/* Filter Bar */}
-          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
+          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
             {/* Row 1: Asset Class Multi-Select Chips + Reserve Toggle */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -387,8 +404,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                     isTotalSelected
-                      ? "bg-slate-900 text-white shadow-2xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
+                      ? "bg-slate-900 text-white shadow-2xs dark:bg-slate-100 dark:text-slate-900"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                   )}
                 >
                   Total
@@ -404,8 +421,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                         active
-                          ? "border-slate-900 bg-slate-900 text-white shadow-2xs"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          ? "border-slate-900 bg-slate-900 text-white shadow-2xs dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                       )}
                     >
                       <span
@@ -424,14 +441,16 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
                   includeReserve
-                    ? "border-slate-700 bg-slate-100 text-slate-900"
-                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                    ? "border-slate-700 bg-slate-100 text-slate-900 dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100"
+                    : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                 )}
               >
                 <Shield
                   className={cn(
                     "h-3.5 w-3.5",
-                    includeReserve ? "text-slate-700" : "text-slate-400"
+                    includeReserve
+                      ? "text-slate-700 dark:text-slate-200"
+                      : "text-slate-400 dark:text-slate-500"
                   )}
                 />
                 {includeReserve ? "Reserva incluída" : "Incluir Reserva"}
@@ -439,9 +458,9 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             </div>
 
             {/* Row 2: Period Range + Daily/Monthly Granularity */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <div className="flex flex-wrap items-center gap-1">
-                <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500">
+                <span className="mr-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
                   <Calendar className="h-3.5 w-3.5" />
                   Período:
                 </span>
@@ -454,7 +473,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                       "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
                       range === opt.value
                         ? "bg-emerald-600 text-white shadow-2xs"
-                        : "text-slate-600 hover:bg-slate-100"
+                        : "text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     )}
                   >
                     {opt.label}
@@ -462,15 +481,15 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 ))}
               </div>
 
-              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold">
+              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
                 <button
                   type="button"
                   onClick={() => setGranularity("DAILY")}
                   className={cn(
                     "rounded-lg px-3 py-1 transition-colors",
                     granularity === "DAILY"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                   )}
                 >
                   Diária
@@ -481,8 +500,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                   className={cn(
                     "rounded-lg px-3 py-1 transition-colors",
                     granularity === "MONTHLY"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                   )}
                 >
                   Mensal
@@ -494,35 +513,35 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {/* Patrimônio */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                 <span>Patrimônio Atual</span>
-                <Wallet className="h-4 w-4 text-emerald-600" />
+                <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
                 {formatBRL(kpis.currentMarketValueBRL)}
               </p>
-              <p className="mt-1 truncate text-xs text-slate-500">
+              <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                 {selectionDescription}
               </p>
             </div>
 
             {/* Aportado */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                 <span>
                   {kpis.isSubPeriod ? "Aportado no Período" : "Custo Aportado"}
                 </span>
-                <Coins className="h-4 w-4 text-sky-600" />
+                <Coins className="h-4 w-4 text-sky-600 dark:text-sky-400" />
               </div>
-              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
                 {formatBRL(
                   kpis.isSubPeriod
                     ? kpis.periodContributionBRL
                     : kpis.totalInvestedCostBRL
                 )}
               </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums">
+              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
                 {kpis.isSubPeriod
                   ? `Custo acumulado: ${formatBRL(kpis.totalInvestedCostBRL)}`
                   : `Aporte líquido: ${formatBRL(kpis.periodContributionBRL)}`}
@@ -530,29 +549,31 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             </div>
 
             {/* Rendimento R$ */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                 <span>
                   {kpis.isSubPeriod
                     ? "Rendimento no Período"
                     : "Rendimento Acumulado"}
                 </span>
                 {isGainPositive ? (
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
+                  <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-rose-600" />
+                  <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                 )}
               </div>
               <p
                 className={cn(
                   "mt-2 text-2xl font-bold tracking-tight tabular-nums",
-                  isGainPositive ? "text-emerald-700" : "text-rose-600"
+                  isGainPositive
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
                 )}
               >
                 {isGainPositive ? "+" : ""}
                 {formatBRL(gainValue)}
               </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums">
+              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
                 {kpis.isSubPeriod
                   ? `Acumulado total: ${
                       kpis.totalProfitLossBRL >= 0 ? "+" : ""
@@ -562,25 +583,27 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             </div>
 
             {/* Rentabilidade % */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
                 <span>Rentabilidade Acumulada</span>
                 {isTotalReturnPositive ? (
-                  <ArrowUpRight className="h-4 w-4 text-emerald-600" />
+                  <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <ArrowDownRight className="h-4 w-4 text-rose-600" />
+                  <ArrowDownRight className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                 )}
               </div>
               <p
                 className={cn(
                   "mt-2 text-2xl font-bold tracking-tight tabular-nums",
-                  isTotalReturnPositive ? "text-emerald-700" : "text-rose-600"
+                  isTotalReturnPositive
+                    ? "text-emerald-700 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400"
                 )}
               >
                 {isTotalReturnPositive ? "+" : ""}
                 {formatPct(kpis.totalProfitLossPct, 2)}
               </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums">
+              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
                 {kpis.isSubPeriod
                   ? `No período: ${
                       kpis.periodReturnPct >= 0 ? "+" : ""
@@ -591,21 +614,21 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
           </div>
 
           {/* Chart 1: Patrimônio vs Aportado / Ganho / Rentabilidade */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   {chartMode === "PATRIMONIO" && "Patrimônio vs. Aportado"}
                   {chartMode === "GANHO" && "Evolução do Rendimento (R$)"}
                   {chartMode === "RENTABILIDADE" && "Rentabilidade Acumulada (%)"}
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Visão {granularity === "DAILY" ? "diária" : "mensal"} ·{" "}
                   {selectionDescription}
                 </p>
               </div>
 
-              <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-0.5 text-xs font-semibold">
+              <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
                 {CHART_MODES.map((m) => (
                   <button
                     key={m.value}
@@ -614,8 +637,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                     className={cn(
                       "rounded-lg px-2.5 py-1.5 transition-colors",
                       chartMode === m.value
-                        ? "bg-white text-slate-900 shadow-2xs"
-                        : "text-slate-500 hover:text-slate-800"
+                        ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                     )}
                   >
                     {m.label}
@@ -625,7 +648,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             </div>
 
             {evolutionSeries.length === 0 ? (
-              <div className="flex h-72 items-center justify-center text-sm text-slate-400">
+              <div className="flex h-72 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
                 Sem dados para o filtro selecionado.
               </div>
             ) : (
@@ -695,18 +718,18 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
 
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        stroke="#e2e8f0"
+                        stroke={gridStroke}
                         vertical={false}
                       />
                       <XAxis
                         dataKey="label"
-                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        tick={{ fontSize: 11, fill: axisTickFill }}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: gridStroke }}
                         minTickGap={28}
                       />
                       <YAxis
-                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        tick={{ fontSize: 11, fill: axisTickFill }}
                         tickLine={false}
                         axisLine={false}
                         width={68}
@@ -724,22 +747,26 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                             type="monotone"
                             dataKey="marketValueBRL"
                             name="Patrimônio"
-                            stroke="#059669"
+                            stroke="#10b981"
                             strokeWidth={2.2}
                             fill="url(#evoEmeraldGrad)"
                             dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0, fill: "#059669" }}
+                            activeDot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
                           />
                           <Area
                             type="monotone"
                             dataKey="investedCostBRL"
                             name="Aportado"
-                            stroke="#64748b"
+                            stroke={isDark ? "#94a3b8" : "#64748b"}
                             strokeWidth={1.8}
                             strokeDasharray="5 4"
                             fill="none"
                             dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0, fill: "#64748b" }}
+                            activeDot={{
+                              r: 4,
+                              strokeWidth: 0,
+                              fill: isDark ? "#94a3b8" : "#64748b",
+                            }}
                           />
                         </>
                       )}
@@ -748,7 +775,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                         <>
                           <ReferenceLine
                             y={0}
-                            stroke="#94a3b8"
+                            stroke={refLineStroke}
                             strokeDasharray="3 3"
                           />
                           <Area
@@ -757,8 +784,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                             name="Rendimento (R$)"
                             stroke={
                               kpis.totalProfitLossBRL >= 0
-                                ? "#059669"
-                                : "#e11d48"
+                                ? "#10b981"
+                                : "#f43f5e"
                             }
                             strokeWidth={2.2}
                             fill={
@@ -772,8 +799,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                               strokeWidth: 0,
                               fill:
                                 kpis.totalProfitLossBRL >= 0
-                                  ? "#059669"
-                                  : "#e11d48",
+                                  ? "#10b981"
+                                  : "#f43f5e",
                             }}
                           />
                         </>
@@ -783,18 +810,18 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                         <>
                           <ReferenceLine
                             y={0}
-                            stroke="#94a3b8"
+                            stroke={refLineStroke}
                             strokeDasharray="3 3"
                           />
                           <Area
                             type="monotone"
                             dataKey="profitLossPct"
                             name="Rentabilidade (%)"
-                            stroke="#0284c7"
+                            stroke="#0ea5e9"
                             strokeWidth={2.2}
                             fill="url(#evoBlueGrad)"
                             dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0, fill: "#0284c7" }}
+                            activeDot={{ r: 4, strokeWidth: 0, fill: "#0ea5e9" }}
                           />
                         </>
                       )}
@@ -803,13 +830,13 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 </div>
 
                 {chartMode === "PATRIMONIO" && (
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-600">
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-600 dark:text-slate-400">
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-0.5 w-4 rounded-full bg-emerald-600" />
+                      <span className="h-0.5 w-4 rounded-full bg-emerald-500" />
                       Patrimônio (valor de mercado)
                     </span>
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-500" />
+                      <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-500 dark:border-slate-400" />
                       Total Aportado (custo)
                     </span>
                   </div>
@@ -819,29 +846,29 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
           </div>
 
           {/* Chart 2: Aportes (Mensais / Diários) */}
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
                   {contributionGrouping === "MONTHLY"
                     ? "Aportes Mensais"
                     : "Aportes por Dia"}
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Compras menos vendas (ajustes de rendimento excluídos) ·{" "}
                   {selectionDescription}
                 </p>
               </div>
 
-              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold">
+              <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
                 <button
                   type="button"
                   onClick={() => setContributionGrouping("MONTHLY")}
                   className={cn(
                     "rounded-lg px-3 py-1 transition-colors",
                     contributionGrouping === "MONTHLY"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                   )}
                 >
                   Por mês
@@ -852,8 +879,8 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                   className={cn(
                     "rounded-lg px-3 py-1 transition-colors",
                     contributionGrouping === "DAILY"
-                      ? "bg-white text-slate-900 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                   )}
                 >
                   Por dia
@@ -862,7 +889,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             </div>
 
             {contributionSeries.length === 0 ? (
-              <div className="flex h-64 items-center justify-center text-sm text-slate-400">
+              <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
                 Nenhum aporte registrado no período e filtro selecionados.
               </div>
             ) : (
@@ -876,24 +903,24 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
-                        stroke="#e2e8f0"
+                        stroke={gridStroke}
                         vertical={false}
                       />
                       <XAxis
                         dataKey="label"
-                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        tick={{ fontSize: 11, fill: axisTickFill }}
                         tickLine={false}
-                        axisLine={{ stroke: "#e2e8f0" }}
+                        axisLine={{ stroke: gridStroke }}
                         minTickGap={20}
                       />
                       <YAxis
-                        tick={{ fontSize: 11, fill: "#64748b" }}
+                        tick={{ fontSize: 11, fill: axisTickFill }}
                         tickLine={false}
                         axisLine={false}
                         width={68}
                         tickFormatter={(val: number) => formatCompactBRL(val)}
                       />
-                      <ReferenceLine y={0} stroke="#94a3b8" />
+                      <ReferenceLine y={0} stroke={refLineStroke} />
                       <Tooltip
                         content={
                           <ContributionTooltip activeClasses={activeClasses} />
@@ -914,7 +941,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 </div>
 
                 {/* Legend */}
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600">
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600 dark:text-slate-400">
                   {activeClasses.map((cls) => (
                     <span
                       key={cls}

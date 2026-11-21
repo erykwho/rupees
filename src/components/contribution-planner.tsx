@@ -87,20 +87,20 @@ export function ContributionPlanner({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
           Plano de Aporte
         </h1>
-        <p className="mt-0.5 text-sm text-slate-500">
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
           Sugestão automática dos ativos mais distantes do objetivo, respeitando
           lotes inteiros na B3 e frações (mín. US$ 5) nos EUA.
         </p>
       </div>
 
       {/* Controls */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
               Quanto você quer investir (R$)
             </label>
             <input
@@ -112,12 +112,12 @@ export function ContributionPlanner({
                 setAmountInput(e.target.value);
                 setRecordedIds([]);
               }}
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 font-mono text-lg font-bold text-slate-900 focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-lg font-bold text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
               Quantidade máxima de ativos ({maxAssets})
             </label>
             <div className="flex items-center gap-3 pt-1">
@@ -129,15 +129,15 @@ export function ContributionPlanner({
                 onChange={(e) => setMaxAssets(Number(e.target.value))}
                 className="h-2 flex-1 cursor-pointer accent-emerald-600"
               />
-              <span className="w-10 rounded-lg bg-slate-100 py-1 text-center font-mono text-sm font-bold text-slate-900">
+              <span className="w-10 rounded-lg bg-slate-100 py-1 text-center font-mono text-sm font-bold text-slate-900 dark:bg-slate-800 dark:text-slate-100">
                 {maxAssets}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="mb-2 text-xs font-semibold text-slate-500">
+        <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
             Ignorar classes neste aporte (opcional):
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -151,8 +151,8 @@ export function ContributionPlanner({
                   className={cn(
                     "rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
                     ignored
-                      ? "border-rose-200 bg-rose-50 text-rose-700 line-through"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "border-rose-200 bg-rose-50 text-rose-700 line-through dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                   )}
                 >
                   {ASSET_CLASS_LABELS[cls]}
@@ -165,44 +165,48 @@ export function ContributionPlanner({
 
       {/* Summary Strip */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Total Alocado</p>
-          <p className="mt-1 font-mono text-xl font-bold text-emerald-700 tabular-nums">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            Total Alocado
+          </p>
+          <p className="mt-1 font-mono text-xl font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
             {formatBRL(plan.totalAllocatedBRL)}
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
             Sobra não alocada
           </p>
-          <p className="mt-1 font-mono text-xl font-bold text-slate-700 tabular-nums">
+          <p className="mt-1 font-mono text-xl font-bold text-slate-700 tabular-nums dark:text-slate-200">
             {formatBRL(plan.remainingBRL)}
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
-          <p className="text-xs font-medium text-slate-500">Câmbio usado</p>
-          <p className="mt-1 font-mono text-xl font-bold text-slate-900 tabular-nums">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            Câmbio usado
+          </p>
+          <p className="mt-1 font-mono text-xl font-bold text-slate-900 tabular-nums dark:text-slate-100">
             {formatBRL(plan.usdBrl)}
           </p>
         </div>
       </div>
 
       {/* Suggestions */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
-          <Compass className="h-4 w-4 text-emerald-600" />
-          <h2 className="text-base font-bold text-slate-900">
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <Compass className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
             Sugestão de Compras
           </h2>
         </div>
 
         {plan.suggestions.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-400">
+          <div className="px-5 py-12 text-center text-sm text-slate-400 dark:text-slate-500">
             Informe um valor para calcular as sugestões de aporte ou verifique se
             há ativos ativos com objetivos definidos.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {plan.suggestions.map((s) => {
               const isRecorded = recordedIds.includes(s.assetId);
               const isRecording = recordingId === s.assetId;
@@ -213,16 +217,16 @@ export function ContributionPlanner({
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-base font-bold text-slate-900">
+                      <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
                         {s.ticker}
                       </span>
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         {ASSET_CLASS_LABELS[s.assetClass]}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       Falta para meta:{" "}
-                      <span className="font-mono font-semibold text-slate-700 tabular-nums">
+                      <span className="font-mono font-semibold text-slate-700 tabular-nums dark:text-slate-200">
                         {formatBRL(s.neededBRL)}
                       </span>{" "}
                       · Cotação:{" "}
@@ -234,14 +238,14 @@ export function ContributionPlanner({
 
                   <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
                     <div className="text-left sm:text-right">
-                      <p className="font-mono text-base font-bold text-emerald-700 tabular-nums">
+                      <p className="font-mono text-base font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
                         {formatBRL(s.investBRL)}
                       </p>
-                      <p className="font-mono text-xs text-slate-500 tabular-nums">
+                      <p className="font-mono text-xs text-slate-500 tabular-nums dark:text-slate-400">
                         {formatQty(s.suggestedQty, s.assetClass)}{" "}
                         {s.assetClass === "FIXED_INCOME" ? "reais" : "unid."}
                         {s.currency === "USD" && (
-                          <span className="ml-1.5 text-slate-400">
+                          <span className="ml-1.5 text-slate-400 dark:text-slate-500">
                             ({formatUSD(s.investUSD)})
                           </span>
                         )}
@@ -256,7 +260,7 @@ export function ContributionPlanner({
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
                           isRecorded
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
                             : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
                         )}
                       >
@@ -276,7 +280,7 @@ export function ContributionPlanner({
                       </button>
                     )}
                     {s.investBRL === 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
+                      <span className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                         <Check className="h-3.5 w-3.5" />
                         Saldo insuficiente p/ 1 cota
                       </span>
