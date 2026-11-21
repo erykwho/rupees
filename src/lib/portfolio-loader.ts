@@ -1,18 +1,24 @@
 import { prisma } from "@/lib/prisma";
 import { computePortfolioSummary } from "@/lib/domain/calculations";
+import {
+  computeEstimatedFixedIncomeValuesAsOf,
+  toISODate,
+} from "@/lib/domain/evolution";
+import { getHistoricalFixedIncomeBenchmarks } from "@/lib/fixed-income-rates";
 import { getQuotesForAssets } from "@/lib/quotes";
 import { ensureSectorGoalsBackfill } from "@/lib/sector-goals";
-import type {
-  AssetClassKey,
-  AssetInput,
-  CurrencyCode,
-  GoalInput,
-  PortfolioSummary,
-  PriceModeKey,
-  SectorGoalInput,
-  TransactionInput,
-  TransactionTypeKey,
-  VariableIncomeClassKey,
+import {
+  type AssetClassKey,
+  type AssetInput,
+  type CurrencyCode,
+  type GoalInput,
+  type PortfolioSummary,
+  type PriceModeKey,
+  type SectorGoalInput,
+  type TransactionInput,
+  type TransactionTypeKey,
+  type VariableIncomeClassKey,
+  isFixedIncomeClass,
 } from "@/lib/domain/types";
 
 export async function loadUserPortfolio(
@@ -95,22 +101,48 @@ export async function loadUserPortfolio(
     notes: t.notes,
   }));
 
-  const quoteResult = await getQuotesForAssets(
-    assets.map((a) => ({
-      id: a.id,
-      ticker: a.ticker,
-      assetClass: a.assetClass,
-      priceMode: a.priceMode,
-      tickerValidationStatus: a.tickerValidationStatus,
-    })),
-    { forceRefresh: options.forceRefreshQuotes }
+  const configuredFiAssetIds = new Set(
+    assets
+      .filter((a) => isFixedIncomeClass(a.assetClass) && a.fixedIncomeIndex !== null)
+      .map((a) => a.id)
   );
+  const firstFiTx = transactions.find((t) => configuredFiAssetIds.has(t.assetId));
+  const todayISO = toISODate(new Date());
+
+  const [quoteResult, fixedIncomeRatesResult] = await Promise.all([
+    getQuotesForAssets(
+      assets.map((a) => ({
+        id: a.id,
+        ticker: a.ticker,
+        assetClass: a.assetClass,
+        priceMode: a.priceMode,
+        tickerValidationStatus: a.tickerValidationStatus,
+      })),
+      { forceRefresh: options.forceRefreshQuotes }
+    ),
+    firstFiTx
+      ? getHistoricalFixedIncomeBenchmarks({
+          startDate: toISODate(firstFiTx.date),
+          endDate: todayISO,
+          forceRefresh: options.forceRefreshQuotes,
+        })
+      : Promise.resolve(null),
+  ]);
 
   const assetsWithFreshStatus: AssetInput[] = assets.map((a) => ({
     ...a,
     tickerValidationStatus:
       quoteResult.updatedStatuses[a.id] ?? a.tickerValidationStatus ?? "VERIFIED",
   }));
+
+  const estimatedFixedIncomeValues = fixedIncomeRatesResult
+    ? computeEstimatedFixedIncomeValuesAsOf({
+        assets: assetsWithFreshStatus,
+        transactions,
+        fixedIncomeRates: fixedIncomeRatesResult.rates,
+        asOfDateISO: todayISO,
+      })
+    : undefined;
 
   const summary = computePortfolioSummary({
     assets: assetsWithFreshStatus,
@@ -120,12 +152,15 @@ export async function loadUserPortfolio(
     quotes: quoteResult.quotes,
     usdBrl: quoteResult.usdBrl,
     usdBrlUpdatedAt: quoteResult.usdBrlUpdatedAt,
+    estimatedFixedIncomeValues,
   });
 
   return {
     summary,
     goal,
     sectorGoals,
-    refreshedQuotesCount: quoteResult.refreshedCount,
+    refreshedQuotesCount:
+      quoteResult.refreshedCount +
+      (fixedIncomeRatesResult?.fetchedSeriesCount ?? 0),
   };
 }

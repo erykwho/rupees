@@ -706,6 +706,282 @@ export function computePortfolioEvolution(params: {
   };
 }
 
+/**
+ * Calcula o valor de mercado atual estimado (líquido de IR, ancorado em BALANCE_ADJUSTMENT)
+ * por ativo de Renda Fixa / Reserva de Emergência configurado, usando exatamente o mesmo motor
+ * diário de `computePortfolioEvolution` para garantir consistência entre Visão Geral e Evolução.
+ */
+export function computeEstimatedFixedIncomeValuesAsOf(params: {
+  assets: AssetInput[];
+  transactions: TransactionInput[];
+  fixedIncomeRates: HistoricalBenchmarkRates;
+  asOfDateISO?: string;
+}): Record<string, number> {
+  const {
+    assets,
+    transactions,
+    fixedIncomeRates,
+    asOfDateISO = toISODate(new Date()),
+  } = params;
+
+  const fiAssets = assets.filter(
+    (a) => isFixedIncomeClass(a.assetClass) && Boolean(a.fixedIncomeIndex)
+  );
+  if (fiAssets.length === 0 || transactions.length === 0) {
+    return {};
+  }
+
+  const fiAssetById = new Map(fiAssets.map((a) => [a.id, a]));
+  const sortedTx = [...transactions]
+    .filter((tx) => fiAssetById.has(tx.assetId))
+    .sort((a, b) => {
+      const da = toISODate(a.date);
+      const db = toISODate(b.date);
+      if (da !== db) return da.localeCompare(db);
+      return a.id.localeCompare(b.id);
+    });
+
+  if (sortedTx.length === 0) {
+    return {};
+  }
+
+  const txByDate = new Map<string, TransactionInput[]>();
+  const assetsWithLotRate = new Set<string>();
+  for (const tx of sortedTx) {
+    const d = toISODate(tx.date);
+    const list = txByDate.get(d);
+    if (list) list.push(tx);
+    else txByDate.set(d, [tx]);
+
+    if (
+      tx.type === "BUY" &&
+      tx.fixedIncomeRate !== undefined &&
+      tx.fixedIncomeRate !== null &&
+      Number.isFinite(tx.fixedIncomeRate)
+    ) {
+      assetsWithLotRate.add(tx.assetId);
+    }
+  }
+
+  const estimatedFiAssetIds = new Set<string>();
+  const assetMaturityISO = new Map<string, string | null>();
+  for (const asset of fiAssets) {
+    const hasDefaultRate =
+      asset.fixedIncomeRate !== undefined &&
+      asset.fixedIncomeRate !== null &&
+      Number.isFinite(asset.fixedIncomeRate);
+    if (!hasDefaultRate && !assetsWithLotRate.has(asset.id)) continue;
+
+    estimatedFiAssetIds.add(asset.id);
+    assetMaturityISO.set(
+      asset.id,
+      asset.maturityDate ? toISODate(asset.maturityDate) : null
+    );
+  }
+
+  if (estimatedFiAssetIds.size === 0) {
+    return {};
+  }
+
+  const firstDate = toISODate(sortedTx[0].date);
+  const lastTxDate = toISODate(sortedTx[sortedTx.length - 1].date);
+  const endDate = lastTxDate > asOfDateISO ? lastTxDate : asOfDateISO;
+
+  let lastKnownSelic =
+    findLatestPriceOnOrBefore(fixedIncomeRates.selicAnnualPct, firstDate, true) ??
+    fixedIncomeRates.fallback.selic;
+  let lastKnownCdi =
+    findLatestPriceOnOrBefore(fixedIncomeRates.cdiAnnualPct, firstDate, true) ??
+    fixedIncomeRates.fallback.cdi;
+
+  const qtyByAsset = new Map<string, number>();
+  const fiLotsByAsset = new Map<string, FixedIncomeLot[]>();
+  for (const assetId of estimatedFiAssetIds) {
+    qtyByAsset.set(assetId, 0);
+    fiLotsByAsset.set(assetId, []);
+  }
+
+  for (let date = firstDate; date <= endDate; date = addDaysISO(date, 1)) {
+    const selicOnDay = fixedIncomeRates.selicAnnualPct[date];
+    if (
+      typeof selicOnDay === "number" &&
+      Number.isFinite(selicOnDay) &&
+      selicOnDay >= 0
+    ) {
+      lastKnownSelic = selicOnDay;
+    }
+    const cdiOnDay = fixedIncomeRates.cdiAnnualPct[date];
+    if (
+      typeof cdiOnDay === "number" &&
+      Number.isFinite(cdiOnDay) &&
+      cdiOnDay >= 0
+    ) {
+      lastKnownCdi = cdiOnDay;
+    }
+
+    const ym = date.slice(0, 7);
+    const monthlyIpca = fixedIncomeRates.ipcaMonthlyPct[ym];
+    const dayIpcaAnnual =
+      typeof monthlyIpca === "number" && Number.isFinite(monthlyIpca)
+        ? (Math.pow(
+            1 + Math.max(0, monthlyIpca) / 100,
+            DAYS_PER_YEAR / daysInMonthISO(date)
+          ) -
+            1) *
+          100
+        : fixedIncomeRates.fallback.ipca;
+
+    const dayBenchmarks = {
+      selic: lastKnownSelic,
+      cdi: lastKnownCdi,
+      ipca: dayIpcaAnnual,
+    };
+
+    for (const assetId of estimatedFiAssetIds) {
+      const lots = fiLotsByAsset.get(assetId);
+      if (!lots || lots.length === 0) continue;
+
+      const maturityISO = assetMaturityISO.get(assetId) ?? null;
+      if (maturityISO && date > maturityISO) continue;
+
+      const asset = fiAssetById.get(assetId)!;
+      const index = asset.fixedIncomeIndex!;
+
+      for (const lot of lots) {
+        if (lot.contractedRate === null || !Number.isFinite(lot.contractedRate)) {
+          continue;
+        }
+        const annualGrossRatePct = computeAnnualGrossRatePct(
+          index,
+          lot.contractedRate,
+          dayBenchmarks
+        );
+        const dailyFactor = computeDailyFactorFromAnnualPct(annualGrossRatePct);
+        const currentGross = lot.baseValueBRL + lot.accruedGrossGainBRL;
+        if (currentGross > EPSILON && dailyFactor > 0) {
+          lot.accruedGrossGainBRL += currentGross * (dailyFactor - 1);
+        }
+      }
+    }
+
+    const dayTx = txByDate.get(date) ?? [];
+    for (const tx of dayTx) {
+      if (!estimatedFiAssetIds.has(tx.assetId)) continue;
+      const asset = fiAssetById.get(tx.assetId)!;
+      const fiLots = fiLotsByAsset.get(tx.assetId)!;
+      const prevQty = qtyByAsset.get(tx.assetId) ?? 0;
+
+      const qty = Math.abs(tx.quantity);
+      const total = Math.abs(tx.totalAmount);
+
+      if (tx.type === "BUY") {
+        const nextQty = prevQty + qty;
+        qtyByAsset.set(tx.assetId, nextQty);
+        const manualPrice = asset.manualPrice ?? 1;
+        const initialVal = total > EPSILON ? total : qty * manualPrice;
+        const lotRate =
+          tx.fixedIncomeRate !== undefined &&
+          tx.fixedIncomeRate !== null &&
+          Number.isFinite(tx.fixedIncomeRate)
+            ? tx.fixedIncomeRate
+            : asset.fixedIncomeRate !== undefined &&
+                asset.fixedIncomeRate !== null &&
+                Number.isFinite(asset.fixedIncomeRate)
+              ? asset.fixedIncomeRate
+              : null;
+        fiLots.push({
+          buyDate: date,
+          realQty: qty,
+          baseValueBRL: initialVal,
+          accruedGrossGainBRL: 0,
+          contractedRate: lotRate,
+        });
+      } else if (tx.type === "SELL") {
+        const nextQty = Math.max(0, prevQty - qty);
+        qtyByAsset.set(tx.assetId, nextQty <= EPSILON ? 0 : nextQty);
+        if (nextQty <= EPSILON) {
+          fiLots.length = 0;
+        } else {
+          let remainingToSell = qty;
+          while (remainingToSell > EPSILON && fiLots.length > 0) {
+            const lot = fiLots[0];
+            if (lot.realQty <= remainingToSell + EPSILON) {
+              remainingToSell -= lot.realQty;
+              fiLots.shift();
+            } else {
+              const keepRatio = (lot.realQty - remainingToSell) / lot.realQty;
+              lot.realQty -= remainingToSell;
+              lot.baseValueBRL *= keepRatio;
+              lot.accruedGrossGainBRL *= keepRatio;
+              remainingToSell = 0;
+            }
+          }
+        }
+      } else if (tx.type === "BALANCE_ADJUSTMENT") {
+        const nextQty = Math.max(0, prevQty + tx.quantity);
+        qtyByAsset.set(tx.assetId, nextQty <= EPSILON ? 0 : nextQty);
+        const manualPrice = asset.manualPrice ?? 1;
+        const anchoredBalanceBRL = nextQty * manualPrice;
+        if (nextQty <= EPSILON || anchoredBalanceBRL <= EPSILON) {
+          fiLots.length = 0;
+        } else if (fiLots.length === 0) {
+          fiLots.push({
+            buyDate: date,
+            realQty: nextQty,
+            baseValueBRL: anchoredBalanceBRL,
+            accruedGrossGainBRL: 0,
+            contractedRate:
+              asset.fixedIncomeRate !== undefined &&
+              asset.fixedIncomeRate !== null &&
+              Number.isFinite(asset.fixedIncomeRate)
+                ? asset.fixedIncomeRate
+                : null,
+          });
+        } else {
+          const maturityISO = assetMaturityISO.get(tx.assetId) ?? null;
+          const taxExempt = Boolean(asset.taxExempt);
+          const lotNetValues = fiLots.map((lot) =>
+            computeLotNetValueBRL(lot, date, maturityISO, taxExempt)
+          );
+          const totalNet = lotNetValues.reduce((s, v) => s + v, 0);
+          const totalRealQty = fiLots.reduce((s, lot) => s + lot.realQty, 0);
+
+          for (let i = 0; i < fiLots.length; i++) {
+            const lot = fiLots[i];
+            const weight =
+              totalNet > EPSILON
+                ? lotNetValues[i] / totalNet
+                : totalRealQty > EPSILON
+                  ? lot.realQty / totalRealQty
+                  : 1 / fiLots.length;
+            lot.baseValueBRL = anchoredBalanceBRL * weight;
+            lot.realQty = nextQty * weight;
+            lot.accruedGrossGainBRL = 0;
+          }
+        }
+      }
+    }
+  }
+
+  const result: Record<string, number> = {};
+  for (const assetId of estimatedFiAssetIds) {
+    const qty = qtyByAsset.get(assetId) ?? 0;
+    const lots = fiLotsByAsset.get(assetId);
+    if (qty <= EPSILON || !lots || lots.length === 0) continue;
+
+    const asset = fiAssetById.get(assetId)!;
+    const maturityISO = assetMaturityISO.get(assetId) ?? null;
+    const taxExempt = Boolean(asset.taxExempt);
+    let totalNet = 0;
+    for (const lot of lots) {
+      totalNet += computeLotNetValueBRL(lot, endDate, maturityISO, taxExempt);
+    }
+    result[assetId] = round2(totalNet);
+  }
+
+  return result;
+}
+
 function getRangeStartDate(endDate: string, range: EvolutionRange): string | null {
   switch (range) {
     case "1M":

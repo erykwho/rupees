@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateEvolutionView,
+  computeEstimatedFixedIncomeValuesAsOf,
   computePortfolioEvolution,
 } from "./evolution";
-import type { AssetInput, TransactionInput } from "./types";
+import { computePortfolioSummary } from "./calculations";
+import type { AssetInput, GoalInput, TransactionInput } from "./types";
 
 const baseAssets: AssetInput[] = [
   {
@@ -612,5 +614,146 @@ describe("computePortfolioEvolution — estimated fixed income (net of IR)", () 
     const jan31 = evo.points[evo.points.length - 1];
     // 1000 * (1.01)^(30/31) ~= 1009.68
     expect(jan31.byClass.FIXED_INCOME.marketValueBRL).toBeCloseTo(1009.68, 1);
+  });
+
+  it("matches computePortfolioSummary (Visão Geral) with computePortfolioEvolution (Evolução) to the cent", () => {
+    const assets: AssetInput[] = [
+      {
+        id: "petr",
+        ticker: "PETR4",
+        assetClass: "BR_STOCK",
+        sector: "Petróleo",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "AUTO_YAHOO",
+        manualPrice: null,
+        isActive: true,
+      },
+      {
+        id: "cdb",
+        ticker: "CDB 100%",
+        assetClass: "FIXED_INCOME",
+        sector: "Renda Fixa",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "CDI_PCT",
+        fixedIncomeRate: 100,
+        taxExempt: false,
+      },
+      {
+        id: "selic",
+        ticker: "SELIC",
+        assetClass: "EMERGENCY_RESERVE",
+        sector: "Reserva",
+        currency: "BRL",
+        targetPctInClass: 100,
+        priceMode: "MANUAL",
+        manualPrice: 1,
+        isActive: true,
+        fixedIncomeIndex: "SELIC_PCT",
+        fixedIncomeRate: 100,
+        taxExempt: false,
+      },
+    ];
+
+    const transactions: TransactionInput[] = [
+      {
+        id: "t1",
+        assetId: "petr",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 100,
+        unitPrice: 30,
+        totalAmount: 3000,
+      },
+      {
+        id: "t2",
+        assetId: "cdb",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 2000,
+        unitPrice: 1,
+        totalAmount: 2000,
+      },
+      {
+        id: "t3",
+        assetId: "selic",
+        date: "2025-01-01",
+        type: "BUY",
+        quantity: 1000,
+        unitPrice: 1,
+        totalAmount: 1000,
+      },
+    ];
+
+    const goal: GoalInput = {
+      fixedIncomePct: 40,
+      variableIncomePct: 60,
+      brazilPct: 100,
+      usaPct: 0,
+      brStocksPct: 100,
+      brFiisPct: 0,
+      usStocksPct: 0,
+      usReitsPct: 0,
+    };
+
+    const currentQuotes = {
+      "PETR4.SA": { price: 35, updatedAt: "2026-01-01T15:00:00Z" },
+    };
+
+    const evo = computePortfolioEvolution({
+      assets,
+      transactions,
+      historicalPrices: {},
+      currentQuotes,
+      currentUsdBrl: 5.5,
+      todayISO: "2026-01-01",
+      fixedIncomeRates: defaultRates,
+    });
+
+    const estimatedValues = computeEstimatedFixedIncomeValuesAsOf({
+      assets,
+      transactions,
+      fixedIncomeRates: defaultRates,
+      asOfDateISO: "2026-01-01",
+    });
+
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal,
+      quotes: currentQuotes,
+      usdBrl: 5.5,
+      estimatedFixedIncomeValues: estimatedValues,
+    });
+
+    const aggWithoutReserve = aggregateEvolutionView(evo.points, {
+      selectedClasses: [],
+      includeReserve: false,
+      range: "ALL",
+      granularity: "DAILY",
+      contributionGrouping: "MONTHLY",
+    });
+
+    const aggWithReserve = aggregateEvolutionView(evo.points, {
+      selectedClasses: [],
+      includeReserve: true,
+      range: "ALL",
+      granularity: "DAILY",
+      contributionGrouping: "MONTHLY",
+    });
+
+    expect(summary.totalInvestedValueBRL).toBe(
+      aggWithoutReserve.kpis.currentMarketValueBRL
+    );
+    expect(summary.grandTotalBRL).toBe(
+      aggWithReserve.kpis.currentMarketValueBRL
+    );
+    expect(summary.emergencyReserveBRL).toBe(
+      evo.points[evo.points.length - 1].byClass.EMERGENCY_RESERVE.marketValueBRL
+    );
   });
 });
