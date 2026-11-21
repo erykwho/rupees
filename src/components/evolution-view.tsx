@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Shield,
   SlidersHorizontal,
+  Sparkles,
   TrendingDown,
   TrendingUp,
   Wallet,
@@ -55,6 +56,7 @@ import {
 import type { FixedIncomeInitialData } from "@/lib/fixed-income-loader";
 import { CompactKpiStrip } from "@/components/compact-kpi-strip";
 import { FixedIncomeProjectionView } from "@/components/fixed-income-projection-view";
+import { LongTermProjectionView } from "@/components/long-term-projection-view";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
 import {
@@ -529,9 +531,9 @@ export function EvolutionView({
   const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
 
-  const [activeTab, setActiveTab] = useState<"HISTORICO" | "RENDA_FIXA">(
-    "HISTORICO"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "HISTORICO" | "PROJECAO" | "RENDA_FIXA"
+  >("HISTORICO");
   const [data, setData] = useState<EvolutionData>(initialData);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -732,7 +734,7 @@ export function EvolutionView({
       </div>
 
       {/* Main View Tabs */}
-      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900">
+      <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900">
         <button
           type="button"
           onClick={() => setActiveTab("HISTORICO")}
@@ -745,6 +747,19 @@ export function EvolutionView({
         >
           <TrendingUp className="h-3.5 w-3.5" />
           Histórico
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("PROJECAO")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            activeTab === "PROJECAO"
+              ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
+              : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Projeção
         </button>
         <button
           type="button"
@@ -763,6 +778,11 @@ export function EvolutionView({
 
       {activeTab === "RENDA_FIXA" ? (
         <FixedIncomeProjectionView initialData={initialFixedIncome} />
+      ) : activeTab === "PROJECAO" ? (
+        <LongTermProjectionView
+          evolutionData={data}
+          benchmarks={initialFixedIncome.benchmarks}
+        />
       ) : data.points.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900">
           <TrendingUp className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
