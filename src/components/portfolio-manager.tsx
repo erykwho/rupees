@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
+  Clock,
   Layers,
+  Loader2,
   Pencil,
   Plus,
   Search,
@@ -38,6 +41,10 @@ import {
   isFixedIncomeClass,
   isVariableIncomeClass,
 } from "@/lib/domain/types";
+import {
+  getExpectedExchangeLabel,
+  normalizeTicker,
+} from "@/lib/domain/ticker-validation";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
 import { maskBRL, maskQty } from "@/lib/privacy";
@@ -64,6 +71,16 @@ const SECTOR_CLASSES: InvestmentClassKey[] = INVESTMENT_CLASSES.filter(
 
 interface PortfolioManagerProps {
   initialSummary: PortfolioSummary;
+}
+
+interface TickerSearchResult {
+  ticker: string;
+  yahooSymbol: string;
+  name: string;
+  exchange: string;
+  quoteType: string;
+  currency: string;
+  price?: number | null;
 }
 
 interface AssetFormState {
@@ -161,6 +178,21 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
   const [form, setForm] = useState<AssetFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [yahooUnavailableError, setYahooUnavailableError] = useState<
+    string | null
+  >(null);
+
+  // Yahoo ticker autocomplete state (for variable-income classes)
+  const [tickerSuggestions, setTickerSuggestions] = useState<
+    TickerSearchResult[]
+  >([]);
+  const [searchingTickers, setSearchingTickers] = useState(false);
+  const [searchUnavailable, setSearchUnavailable] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [selectedTickerInfo, setSelectedTickerInfo] =
+    useState<TickerSearchResult | null>(null);
+  const [tickerTouched, setTickerTouched] = useState(false);
+  const tickerBoxRef = useRef<HTMLDivElement | null>(null);
 
   // Inline new sector creation inside asset modal
   const [creatingNewSector, setCreatingNewSector] = useState(false);
@@ -181,6 +213,79 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       setSummary(data.summary);
     }
   }
+
+  // Close autocomplete dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        tickerBoxRef.current &&
+        !tickerBoxRef.current.contains(event.target as Node)
+      ) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounced Yahoo ticker search for variable-income classes
+  useEffect(() => {
+    if (!modalOpen || !isVariableIncomeClass(form.assetClass)) {
+      return;
+    }
+
+    const q = form.ticker.trim();
+    if (!q || !tickerTouched) {
+      return;
+    }
+
+    // If user just selected an item matching the input, skip re-fetching
+    if (
+      selectedTickerInfo &&
+      selectedTickerInfo.ticker === normalizeTicker(q, form.assetClass)
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSearchingTickers(true);
+      setSearchUnavailable(false);
+      try {
+        const params = new URLSearchParams({
+          q,
+          assetClass: form.assetClass,
+        });
+        const res = await fetch(`/api/tickers/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          setTickerSuggestions([]);
+          setSearchUnavailable(true);
+          return;
+        }
+        const data = (await res.json()) as {
+          results?: TickerSearchResult[];
+          unavailable?: boolean;
+        };
+        setTickerSuggestions(data.results ?? []);
+        setSearchUnavailable(Boolean(data.unavailable));
+        setDropdownOpen(true);
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          setTickerSuggestions([]);
+          setSearchUnavailable(true);
+        }
+      } finally {
+        setSearchingTickers(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [modalOpen, form.ticker, form.assetClass, tickerTouched, selectedTickerInfo]);
 
   const filteredAssets = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -206,6 +311,14 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       (c) => Math.abs(c.targetSumInClass - 100) > 0.05 && c.targetPct > 0
     );
   }, [summary.classes]);
+
+  const tickerValidationIssues = useMemo(() => {
+    return summary.assets.filter(
+      (a) =>
+        isVariableIncomeClass(a.assetClass) &&
+        a.tickerValidationStatus !== "VERIFIED"
+    );
+  }, [summary.assets]);
 
   const sectorIssues = useMemo(() => {
     return summary.sectors
@@ -248,6 +361,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     targetPctInClass?: string;
   }) {
     setError(null);
+    setYahooUnavailableError(null);
+    setSelectedTickerInfo(null);
+    setTickerSuggestions([]);
+    setDropdownOpen(false);
+    setTickerTouched(false);
     setCreatingNewSector(false);
     setInlineSectorName("");
     setInlineSectorTarget("");
@@ -273,6 +391,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
   function openEditModal(asset: AssetSummary) {
     setError(null);
+    setYahooUnavailableError(null);
+    setSelectedTickerInfo(null);
+    setTickerSuggestions([]);
+    setDropdownOpen(false);
+    setTickerTouched(false);
     setCreatingNewSector(false);
     setInlineSectorName("");
     setInlineSectorTarget("");
@@ -332,10 +455,10 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     }
   }
 
-  async function handleSaveAsset(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitAsset(allowUnverifiedOnUnavailable = false) {
     setSaving(true);
     setError(null);
+    setYahooUnavailableError(null);
 
     try {
       const isFixed = isFixedIncomeClass(form.assetClass);
@@ -344,7 +467,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
         : null;
 
       const payload = {
-        ticker: form.ticker.trim().toUpperCase(),
+        ticker: normalizeTicker(form.ticker, form.assetClass),
         assetClass: form.assetClass,
         sector: form.sector.trim() || "Outros",
         targetPctInClass: Number(form.targetPctInClass.replace(",", ".")) || 0,
@@ -362,6 +485,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             : null,
         maturityDate: isFixed && form.maturityDate ? form.maturityDate : null,
         taxExempt: isFixed ? form.taxExempt : false,
+        allowUnverifiedOnUnavailable,
       };
 
       const url = form.id ? `/api/assets/${form.id}` : "/api/assets";
@@ -374,7 +498,17 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+        };
+        if (data.code === "YAHOO_UNAVAILABLE") {
+          setYahooUnavailableError(
+            data.error ??
+              "Não foi possível consultar o Yahoo Finance no momento."
+          );
+          return;
+        }
         setError(data.error ?? "Erro ao salvar ativo.");
         return;
       }
@@ -384,6 +518,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSaveAsset(e: React.FormEvent) {
+    e.preventDefault();
+    await submitAsset(false);
   }
 
   async function handleDeleteAsset(asset: AssetSummary) {
@@ -492,6 +631,48 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-2.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           Todas as classes de investimento fecham em 100% de alocação alvo.
+        </div>
+      )}
+
+      {/* Ticker Validation Inconsistency Banner */}
+      {tickerValidationIssues.length > 0 && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-xs text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">
+                Inconsistência de ticker detectada no Yahoo Finance
+              </p>
+              <p className="mt-0.5 text-[11px] text-rose-700/90 dark:text-rose-300/90">
+                Os ativos abaixo não foram confirmados na bolsa da sua classe ou
+                aguardam revalidação automática. Clique em um ticker para
+                corrigir.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {tickerValidationIssues.map((a) => {
+                  const isInvalid = a.tickerValidationStatus === "INVALID";
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => openEditModal(a)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-xs font-semibold transition-colors",
+                        isInvalid
+                          ? "bg-white/90 text-rose-800 hover:bg-white dark:bg-slate-900/80 dark:text-rose-300 dark:hover:bg-slate-900"
+                          : "bg-amber-100/90 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/70 dark:text-amber-300 dark:hover:bg-amber-950"
+                      )}
+                    >
+                      <span>{a.ticker}</span>
+                      <span className="font-sans text-[10px] font-medium opacity-80">
+                        · {isInvalid ? "Inválido" : "Pendente"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -645,13 +826,33 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                       )}
                     >
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
                             {a.ticker}
                           </span>
                           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                             {ASSET_CLASS_LABELS[a.assetClass]}
                           </span>
+                          {!isFixedOrReserve &&
+                            a.tickerValidationStatus === "INVALID" && (
+                              <span
+                                title="Ticker não encontrado na bolsa desta classe no Yahoo Finance"
+                                className="inline-flex items-center gap-1 rounded-md bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/70 dark:text-rose-300"
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                Ticker inválido
+                              </span>
+                            )}
+                          {!isFixedOrReserve &&
+                            a.tickerValidationStatus === "PENDING" && (
+                              <span
+                                title="Aguardando revalidação automática no Yahoo Finance"
+                                className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+                              >
+                                <Clock className="h-3 w-3" />
+                                Pendente
+                              </span>
+                            )}
                           {!a.isActive && (
                             <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                               Inativo
@@ -909,22 +1110,157 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
               </div>
             )}
 
+            {yahooUnavailableError && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/50 dark:text-amber-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="space-y-2">
+                    <p className="font-medium">{yahooUnavailableError}</p>
+                    <p className="text-[11px] opacity-85">
+                      Você pode tentar novamente mais tarde ou salvar agora como{" "}
+                      <strong>Pendente</strong> — o ativo exibirá um alerta até
+                      ser validado automaticamente quando o Yahoo voltar.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => submitAsset(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {saving ? "Salvando..." : "Salvar mesmo assim (pendente)"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSaveAsset} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div ref={tickerBoxRef} className="relative">
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Ticker
                   </label>
-                  <input
-                    required
-                    type="text"
-                    value={form.ticker}
-                    onChange={(e) =>
-                      setForm({ ...form, ticker: e.target.value.toUpperCase() })
-                    }
-                    placeholder="WEGE3, VOO..."
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm uppercase text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                  />
+                  <div className="relative">
+                    <input
+                      required
+                      type="text"
+                      autoComplete="off"
+                      value={form.ticker}
+                      onFocus={() => {
+                        if (
+                          isVariableIncomeClass(form.assetClass) &&
+                          tickerSuggestions.length > 0
+                        ) {
+                          setDropdownOpen(true);
+                        }
+                      }}
+                      onChange={(e) => {
+                        const nextVal = e.target.value.toUpperCase();
+                        setTickerTouched(true);
+                        setSelectedTickerInfo(null);
+                        setYahooUnavailableError(null);
+                        setError(null);
+                        if (!nextVal.trim()) {
+                          setTickerSuggestions([]);
+                          setSearchUnavailable(false);
+                          setDropdownOpen(false);
+                        }
+                        setForm({
+                          ...form,
+                          ticker: nextVal,
+                        });
+                      }}
+                      placeholder={
+                        isFixedIncomeClass(form.assetClass)
+                          ? "Ex: CDB Inter, Selic..."
+                          : form.assetClass === "BR_STOCK" ||
+                              form.assetClass === "BR_FII"
+                            ? "Ex: WEGE3, HGLG11..."
+                            : "Ex: VOO, AAPL, O..."
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 font-mono text-sm uppercase text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    />
+                    {searchingTickers && (
+                      <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                    )}
+                    {!searchingTickers &&
+                      selectedTickerInfo &&
+                      isVariableIncomeClass(form.assetClass) && (
+                        <CheckCircle2 className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+                      )}
+                  </div>
+
+                  {/* Yahoo Finance Autocomplete Dropdown */}
+                  {isVariableIncomeClass(form.assetClass) &&
+                    dropdownOpen &&
+                    tickerTouched &&
+                    form.ticker.trim().length > 0 && (
+                      <div className="absolute left-0 z-30 mt-1.5 w-72 max-w-[calc(100vw-3rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                        {searchingTickers ? (
+                          <div className="flex items-center gap-2 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Buscando em{" "}
+                            {getExpectedExchangeLabel(form.assetClass)}...
+                          </div>
+                        ) : tickerSuggestions.length > 0 ? (
+                          <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
+                            {tickerSuggestions.map((item) => (
+                              <li key={item.yahooSymbol}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      ticker: item.ticker,
+                                    }));
+                                    setSelectedTickerInfo(item);
+                                    setDropdownOpen(false);
+                                    setError(null);
+                                    setYahooUnavailableError(null);
+                                  }}
+                                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                                        {item.ticker}
+                                      </span>
+                                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                        {item.exchange}
+                                      </span>
+                                    </div>
+                                    <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                                      {item.name}
+                                    </p>
+                                  </div>
+                                  {typeof item.price === "number" &&
+                                    item.price > 0 && (
+                                      <span className="shrink-0 font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                        {formatCurrency(
+                                          item.price,
+                                          item.currency === "USD"
+                                            ? "USD"
+                                            : "BRL"
+                                        )}
+                                      </span>
+                                    )}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : searchUnavailable ? (
+                          <div className="px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                            Busca no Yahoo indisponível no momento. Você ainda
+                            pode tentar salvar o ticker.
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                            Nenhum ticker encontrado em{" "}
+                            {getExpectedExchangeLabel(form.assetClass)}.
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
 
                 <div>
@@ -938,6 +1274,14 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                       const isFixed =
                         nextClass === "FIXED_INCOME" ||
                         nextClass === "EMERGENCY_RESERVE";
+                      setSelectedTickerInfo(null);
+                      setTickerSuggestions([]);
+                      setDropdownOpen(false);
+                      setError(null);
+                      setYahooUnavailableError(null);
+                      if (!isFixed && form.ticker.trim()) {
+                        setTickerTouched(true);
+                      }
                       const nextDefaultSector = isVariableIncomeClass(nextClass)
                         ? summary.sectors.find((s) => s.assetClass === nextClass)
                             ?.sector ?? ""
@@ -961,6 +1305,24 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                   </select>
                 </div>
               </div>
+
+              {isVariableIncomeClass(form.assetClass) && (
+                <div className="-mt-2 text-[11px]">
+                  {selectedTickerInfo ? (
+                    <p className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {selectedTickerInfo.name} · {selectedTickerInfo.exchange}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 dark:text-slate-500">
+                      Validado automaticamente no Yahoo Finance (
+                      {getExpectedExchangeLabel(form.assetClass)}).
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <div className="mb-1 flex items-center justify-between">

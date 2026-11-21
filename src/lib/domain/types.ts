@@ -15,6 +15,7 @@ export type VariableIncomeClassKey = Exclude<
 export type CurrencyCode = "BRL" | "USD";
 export type PriceModeKey = "AUTO_YAHOO" | "MANUAL";
 export type TransactionTypeKey = "BUY" | "SELL" | "BALANCE_ADJUSTMENT";
+export type TickerValidationStatusKey = "VERIFIED" | "PENDING" | "INVALID";
 export type FixedIncomeIndexKey =
   | "CDI_PCT"
   | "CDI_PLUS"
@@ -122,6 +123,7 @@ export interface AssetInput {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  tickerValidationStatus?: TickerValidationStatusKey;
   fixedIncomeIndex?: FixedIncomeIndexKey | null;
   fixedIncomeRate?: number | null;
   maturityDate?: Date | string | null;
@@ -155,6 +157,7 @@ export interface AssetSummary {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  tickerValidationStatus: TickerValidationStatusKey;
   fixedIncomeIndex: FixedIncomeIndexKey | null;
   fixedIncomeRate: number | null;
   maturityDate: string | null;

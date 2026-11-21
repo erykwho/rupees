@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRight,
   ArrowUpRight,
   Compass,
@@ -20,6 +21,7 @@ import {
   type PortfolioSummary,
   formatBRL,
   formatPct,
+  isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskBRL } from "@/lib/privacy";
@@ -61,6 +63,16 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
   const regionRows = useMemo(
     () => summary.hierarchy.filter((r) => r.group === "REGION"),
     [summary.hierarchy]
+  );
+
+  const tickerValidationIssues = useMemo(
+    () =>
+      summary.assets.filter(
+        (a) =>
+          isVariableIncomeClass(a.assetClass) &&
+          a.tickerValidationStatus !== "VERIFIED"
+      ),
+    [summary.assets]
   );
 
   return (
@@ -110,6 +122,33 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
           </Link>
         </div>
       </div>
+
+      {/* Compact Ticker Validation Alert */}
+      {tickerValidationIssues.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-3 text-xs text-rose-900 sm:flex-row sm:items-center sm:justify-between dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <div className="flex items-start gap-2 sm:items-center">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 sm:mt-0 dark:text-rose-400" />
+            <span>
+              <strong>
+                {tickerValidationIssues.length}{" "}
+                {tickerValidationIssues.length === 1 ? "ativo" : "ativos"}
+              </strong>{" "}
+              com inconsistência de ticker no Yahoo Finance:{" "}
+              <span className="font-mono font-semibold">
+                {tickerValidationIssues.map((a) => a.ticker).join(", ")}
+              </span>
+              .
+            </span>
+          </div>
+          <Link
+            href="/carteira"
+            className="inline-flex shrink-0 items-center gap-1 font-semibold text-rose-700 hover:underline dark:text-rose-300"
+          >
+            Revisar na Carteira
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

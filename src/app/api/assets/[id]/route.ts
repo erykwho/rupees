@@ -8,6 +8,13 @@ import {
   toAssetSnapshot,
   toTransactionSnapshot,
 } from "@/lib/audit-service";
+import {
+  type AssetClassKey,
+  type TickerValidationStatusKey,
+  isVariableIncomeClass,
+} from "@/lib/domain/types";
+import { normalizeTicker } from "@/lib/domain/ticker-validation";
+import { validateTickerOnYahoo } from "@/lib/ticker-validator";
 
 const updateAssetSchema = z.object({
   ticker: z.string().trim().min(1).max(30).optional(),
@@ -40,6 +47,7 @@ const updateAssetSchema = z.object({
   fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
   maturityDate: z.string().trim().nullable().optional(),
   taxExempt: z.boolean().optional(),
+  allowUnverifiedOnUnavailable: z.boolean().optional(),
 });
 
 function parseOptionalMaturityDate(raw: string | null | undefined): Date | null | undefined {
@@ -77,12 +85,58 @@ export async function PATCH(
       return NextResponse.json({ error: "Ativo não encontrado" }, { status: 404 });
     }
 
-    const nextClass = parsed.data.assetClass ?? existing.assetClass;
+    const nextClass = (parsed.data.assetClass ??
+      existing.assetClass) as AssetClassKey;
+    const nextTicker =
+      parsed.data.ticker !== undefined
+        ? normalizeTicker(parsed.data.ticker, nextClass)
+        : existing.ticker;
     const nextSector = parsed.data.sector ?? existing.sector;
     const nextCurrency =
       nextClass === "US_STOCK" || nextClass === "US_REIT" ? "USD" : "BRL";
     const isFixedIncome =
       nextClass === "FIXED_INCOME" || nextClass === "EMERGENCY_RESERVE";
+
+    const tickerOrClassChanged =
+      nextTicker !== existing.ticker || nextClass !== existing.assetClass;
+
+    let nextValidationStatus: TickerValidationStatusKey =
+      existing.tickerValidationStatus;
+
+    if (isFixedIncome) {
+      nextValidationStatus = "VERIFIED";
+    } else if (tickerOrClassChanged && isVariableIncomeClass(nextClass)) {
+      const validation = await validateTickerOnYahoo(nextTicker, nextClass);
+
+      if (validation.status === "INVALID") {
+        return NextResponse.json(
+          {
+            error:
+              validation.reason ??
+              "Ticker inválido para a bolsa da classe selecionada.",
+            code: "INVALID_TICKER",
+          },
+          { status: 422 }
+        );
+      }
+
+      if (validation.status === "UNAVAILABLE") {
+        if (!parsed.data.allowUnverifiedOnUnavailable) {
+          return NextResponse.json(
+            {
+              error:
+                validation.reason ??
+                "Não foi possível consultar o Yahoo Finance no momento.",
+              code: "YAHOO_UNAVAILABLE",
+            },
+            { status: 503 }
+          );
+        }
+        nextValidationStatus = "PENDING";
+      } else {
+        nextValidationStatus = "VERIFIED";
+      }
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       if (
@@ -112,7 +166,7 @@ export async function PATCH(
       const result = await tx.asset.update({
         where: { id: existing.id },
         data: {
-          ticker: parsed.data.ticker?.toUpperCase(),
+          ticker: parsed.data.ticker !== undefined ? nextTicker : undefined,
           assetClass: parsed.data.assetClass,
           currency: nextCurrency,
           sector: parsed.data.sector,
@@ -120,6 +174,7 @@ export async function PATCH(
           priceMode: parsed.data.priceMode,
           manualPrice: parsed.data.manualPrice,
           isActive: parsed.data.isActive,
+          tickerValidationStatus: nextValidationStatus,
           fixedIncomeIndex: isFixedIncome ? parsed.data.fixedIncomeIndex : null,
           fixedIncomeRate: isFixedIncome ? parsed.data.fixedIncomeRate : null,
           maturityDate: isFixedIncome
@@ -143,9 +198,20 @@ export async function PATCH(
     });
 
     return NextResponse.json({ asset: updated });
-  } catch (err) {
+  } catch (err: unknown) {
     if (err instanceof Error && err.message === "UNAUTHORIZED") {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: string }).code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "Este ticker já existe na sua carteira." },
+        { status: 409 }
+      );
     }
     console.error("PATCH /api/assets/[id] error:", err);
     return NextResponse.json({ error: "Erro ao atualizar ativo" }, { status: 500 });

@@ -74,6 +74,7 @@ export async function loadUserPortfolio(
     priceMode: a.priceMode as PriceModeKey,
     manualPrice: a.manualPrice !== null ? Number(a.manualPrice) : null,
     isActive: a.isActive,
+    tickerValidationStatus: a.tickerValidationStatus,
     fixedIncomeIndex: a.fixedIncomeIndex ?? null,
     fixedIncomeRate:
       a.fixedIncomeRate !== null ? Number(a.fixedIncomeRate) : null,
@@ -96,15 +97,23 @@ export async function loadUserPortfolio(
 
   const quoteResult = await getQuotesForAssets(
     assets.map((a) => ({
+      id: a.id,
       ticker: a.ticker,
       assetClass: a.assetClass,
       priceMode: a.priceMode,
+      tickerValidationStatus: a.tickerValidationStatus,
     })),
     { forceRefresh: options.forceRefreshQuotes }
   );
 
+  const assetsWithFreshStatus: AssetInput[] = assets.map((a) => ({
+    ...a,
+    tickerValidationStatus:
+      quoteResult.updatedStatuses[a.id] ?? a.tickerValidationStatus ?? "VERIFIED",
+  }));
+
   const summary = computePortfolioSummary({
-    assets,
+    assets: assetsWithFreshStatus,
     transactions,
     goal,
     sectorGoals,
