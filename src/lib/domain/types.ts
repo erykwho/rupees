@@ -35,12 +35,12 @@ export const ASSET_CLASS_LABELS: Record<AssetClassKey, string> = {
 };
 
 export const ASSET_CLASS_COLORS: Record<AssetClassKey, string> = {
-  FIXED_INCOME: "#0f766e",
-  BR_STOCK: "#059669",
-  BR_FII: "#0284c7",
-  US_STOCK: "#2563eb",
-  US_REIT: "#d97706",
-  EMERGENCY_RESERVE: "#64748b",
+  FIXED_INCOME: "#ec4899", // Rosa / Magenta
+  BR_STOCK: "#10b981", // Verde Esmeralda
+  BR_FII: "#8b5cf6", // Roxo / Violeta
+  US_STOCK: "#0ea5e9", // Azul Celeste
+  US_REIT: "#f59e0b", // Âmbar / Laranja
+  EMERGENCY_RESERVE: "#64748b", // Cinza Slate
 };
 
 export interface GoalInput {
