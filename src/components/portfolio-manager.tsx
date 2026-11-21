@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
+  Layers,
   Pencil,
   Plus,
   Search,
@@ -34,6 +36,7 @@ import {
   formatCurrency,
   formatPct,
   isFixedIncomeClass,
+  isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
@@ -113,18 +116,29 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     }
   }
 
-  const sectorData = useMemo(
+  const sectorRows = useMemo(
     () =>
       summary.sectors
         .filter(
-          (s) => s.assetClass === selectedSectorClass && s.currentValueBRL > 0
+          (s) =>
+            s.assetClass === selectedSectorClass &&
+            (s.currentValueBRL > 0 ||
+              (s.goalTargetPct ?? 0) > 0 ||
+              s.targetPctInClass > 0)
         )
         .map((s) => ({
           name: s.sector,
           value: Number(s.currentValueBRL.toFixed(2)),
           pct: Number(s.actualPctInClass.toFixed(1)),
+          goalPct: s.goalTargetPct,
+          status: s.status,
         })),
     [summary.sectors, selectedSectorClass]
+  );
+
+  const sectorPieData = useMemo(
+    () => sectorRows.filter((s) => s.value > 0),
+    [sectorRows]
   );
 
   const tooltipContentStyle = isDark
@@ -147,6 +161,12 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
   const [form, setForm] = useState<AssetFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Inline new sector creation inside asset modal
+  const [creatingNewSector, setCreatingNewSector] = useState(false);
+  const [inlineSectorName, setInlineSectorName] = useState("");
+  const [inlineSectorTarget, setInlineSectorTarget] = useState("");
+  const [savingInlineSector, setSavingInlineSector] = useState(false);
 
   // Quick balance update modal for Fixed Income / Emergency Reserve
   const [balanceModalAsset, setBalanceModalAsset] =
@@ -187,13 +207,64 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     );
   }, [summary.classes]);
 
-  function openCreateModal() {
+  const sectorIssues = useMemo(() => {
+    return summary.sectors
+      .filter((s) => {
+        if (!isVariableIncomeClass(s.assetClass)) return false;
+        if (selectedClass !== "ALL" && s.assetClass !== selectedClass)
+          return false;
+        return (
+          s.status === "UNCOVERED" ||
+          s.status === "UNDER" ||
+          s.status === "OVER"
+        );
+      })
+      .sort((a, b) => {
+        const order = { UNCOVERED: 0, UNDER: 1, OVER: 2, EXACT: 3, UNTRACKED: 4 };
+        if (order[a.status] !== order[b.status]) {
+          return order[a.status] - order[b.status];
+        }
+        return (b.goalTargetPct ?? 0) - (a.goalTargetPct ?? 0);
+      });
+  }, [summary.sectors, selectedClass]);
+
+  const availableSectorsForFormClass = useMemo(() => {
+    if (!isVariableIncomeClass(form.assetClass)) return [];
+    const names = new Set<string>();
+    for (const s of summary.sectors) {
+      if (s.assetClass === form.assetClass) {
+        names.add(s.sector);
+      }
+    }
+    if (form.sector.trim()) {
+      names.add(form.sector.trim());
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [summary.sectors, form.assetClass, form.sector]);
+
+  function openCreateModal(preset?: {
+    assetClass?: AssetClassKey;
+    sector?: string;
+    targetPctInClass?: string;
+  }) {
     setError(null);
-    const defaultClass = selectedClass === "ALL" ? "BR_STOCK" : selectedClass;
-    const isFixed = isFixedIncomeClass(defaultClass);
+    setCreatingNewSector(false);
+    setInlineSectorName("");
+    setInlineSectorTarget("");
+    const targetClass =
+      preset?.assetClass ??
+      (selectedClass === "ALL" ? "BR_STOCK" : selectedClass);
+    const isFixed = isFixedIncomeClass(targetClass);
+    const defaultSector =
+      preset?.sector ??
+      (isVariableIncomeClass(targetClass)
+        ? summary.sectors.find((s) => s.assetClass === targetClass)?.sector ?? ""
+        : "");
     setForm({
       ...EMPTY_FORM,
-      assetClass: defaultClass,
+      assetClass: targetClass,
+      sector: defaultSector,
+      targetPctInClass: preset?.targetPctInClass ?? "0",
       priceMode: isFixed ? "MANUAL" : "AUTO_YAHOO",
       manualPrice: isFixed ? "1" : "",
     });
@@ -202,6 +273,9 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
   function openEditModal(asset: AssetSummary) {
     setError(null);
+    setCreatingNewSector(false);
+    setInlineSectorName("");
+    setInlineSectorTarget("");
     setForm({
       id: asset.id,
       ticker: asset.ticker,
@@ -218,6 +292,44 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       taxExempt: asset.taxExempt,
     });
     setModalOpen(true);
+  }
+
+  async function handleCreateInlineSector() {
+    if (!isVariableIncomeClass(form.assetClass)) return;
+    const trimmed = inlineSectorName.trim();
+    if (!trimmed) {
+      setError("Informe o nome do novo setor.");
+      return;
+    }
+
+    setSavingInlineSector(true);
+    setError(null);
+
+    try {
+      const targetVal = Number(inlineSectorTarget.replace(",", ".")) || 0;
+      const res = await fetch("/api/sector-goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetClass: form.assetClass,
+          name: trimmed,
+          targetPct: targetVal,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Erro ao criar setor.");
+        return;
+      }
+
+      setForm((prev) => ({ ...prev, sector: trimmed }));
+      setCreatingNewSector(false);
+      setInlineSectorName("");
+      setInlineSectorTarget("");
+      await reloadPortfolio();
+    } finally {
+      setSavingInlineSector(false);
+    }
   }
 
   async function handleSaveAsset(e: React.FormEvent) {
@@ -346,7 +458,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
         <button
           type="button"
-          onClick={openCreateModal}
+          onClick={() => openCreateModal()}
           className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
         >
           <Plus className="h-4 w-4" />
@@ -380,6 +492,61 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-2.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           Todas as classes de investimento fecham em 100% de alocação alvo.
+        </div>
+      )}
+
+      {/* Sector Coverage Alerts Banner */}
+      {sectorIssues.length > 0 && (
+        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 text-xs text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-start gap-2.5">
+              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <div>
+                <p className="font-semibold">
+                  Cobertura por setor: {sectorIssues.length} setor
+                  {sectorIssues.length === 1 ? "" : "es"} com divergência na
+                  alocação alvo
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {sectorIssues.map((s) => (
+                    <span
+                      key={`${s.assetClass}::${s.sector}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-800 shadow-2xs dark:bg-slate-900/90 dark:text-slate-200"
+                    >
+                      <span className="font-semibold">
+                        {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}
+                      </span>
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
+                        {formatPct(s.targetPctInClass, 1)} /{" "}
+                        {formatPct(s.goalTargetPct ?? 0, 1)}
+                      </span>
+                      {s.status === "UNCOVERED" && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openCreateModal({
+                              assetClass: s.assetClass,
+                              sector: s.sector,
+                              targetPctInClass: String(s.goalTargetPct ?? 0),
+                            })
+                          }
+                          className="ml-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
+                        >
+                          + Ativo
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/objetivos"
+              className="shrink-0 font-semibold text-rose-700 hover:underline dark:text-rose-300"
+            >
+              Objetivos →
+            </Link>
+          </div>
         </div>
       )}
 
@@ -625,62 +792,95 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
           </div>
         </div>
 
-        {sectorData.length === 0 ? (
+        {sectorRows.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-            Nenhum valor investido nesta classe ainda.
+            Nenhum valor investido ou meta de setor nesta classe ainda.
           </div>
         ) : (
           <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
             <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={sectorData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={48}
-                    outerRadius={82}
-                    paddingAngle={2}
-                    stroke={isDark ? "#0f172a" : "#ffffff"}
-                  >
-                    {sectorData.map((entry, idx) => (
-                      <Cell
-                        key={entry.name}
-                        fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => maskBRL(Number(value), isPrivate)}
-                    contentStyle={tooltipContentStyle}
-                    itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {sectorPieData.length === 0 ? (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 px-4 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                  Nenhum valor investido nesta classe ainda.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={sectorPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={48}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke={isDark ? "#0f172a" : "#ffffff"}
+                    >
+                      {sectorPieData.map((entry, idx) => (
+                        <Cell
+                          key={entry.name}
+                          fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => maskBRL(Number(value), isPrivate)}
+                      contentStyle={tooltipContentStyle}
+                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-              {sectorData.map((s, idx) => (
-                <div
-                  key={s.name}
-                  className="flex items-center justify-between gap-2 text-xs"
-                >
-                  <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{
-                        backgroundColor:
-                          SECTOR_PALETTE[idx % SECTOR_PALETTE.length],
-                      }}
-                    />
-                    <span className="truncate">{s.name}</span>
-                  </span>
-                  <span className="shrink-0 font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                    {formatPct(s.pct)}
-                  </span>
-                </div>
-              ))}
+              {sectorRows.map((s) => {
+                const pieIdx = sectorPieData.findIndex(
+                  (p) => p.name === s.name
+                );
+                return (
+                  <div
+                    key={s.name}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          pieIdx < 0 &&
+                            "border border-dashed border-slate-400 bg-transparent dark:border-slate-500"
+                        )}
+                        style={
+                          pieIdx >= 0
+                            ? {
+                                backgroundColor:
+                                  SECTOR_PALETTE[
+                                    pieIdx % SECTOR_PALETTE.length
+                                  ],
+                              }
+                            : undefined
+                        }
+                      />
+                      <span className="truncate">{s.name}</span>
+                      {s.status === "UNCOVERED" && (
+                        <span className="shrink-0 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                          Sem ativos
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-right font-mono tabular-nums">
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">
+                        {formatPct(s.pct)}
+                      </span>
+                      {s.goalPct !== null && (
+                        <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                          / alvo {formatPct(s.goalPct, 0)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -738,9 +938,15 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                       const isFixed =
                         nextClass === "FIXED_INCOME" ||
                         nextClass === "EMERGENCY_RESERVE";
+                      const nextDefaultSector = isVariableIncomeClass(nextClass)
+                        ? summary.sectors.find((s) => s.assetClass === nextClass)
+                            ?.sector ?? ""
+                        : form.sector;
+                      setCreatingNewSector(false);
                       setForm({
                         ...form,
                         assetClass: nextClass,
+                        sector: nextDefaultSector,
                         priceMode: isFixed ? "MANUAL" : "AUTO_YAHOO",
                         manualPrice: isFixed ? form.manualPrice || "1" : "",
                       });
@@ -757,17 +963,87 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Setor
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={form.sector}
-                  onChange={(e) => setForm({ ...form, sector: e.target.value })}
-                  placeholder="Ex: Energia Elétrica, Logística, S&P 500..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-                />
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Setor
+                  </label>
+                  {isVariableIncomeClass(form.assetClass) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingNewSector((prev) => !prev);
+                        setError(null);
+                      }}
+                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+                    >
+                      {creatingNewSector ? "Selecionar existente" : "+ Novo setor"}
+                    </button>
+                  )}
+                </div>
+
+                {isVariableIncomeClass(form.assetClass) ? (
+                  creatingNewSector || availableSectorsForFormClass.length === 0 ? (
+                    <div className="space-y-2 rounded-xl border border-emerald-200/80 bg-emerald-50/40 p-2.5 dark:border-emerald-900/60 dark:bg-emerald-950/20">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={inlineSectorName}
+                          onChange={(e) => setInlineSectorName(e.target.value)}
+                          placeholder="Nome do novo setor (ex: Transporte)"
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={inlineSectorTarget}
+                          onChange={(e) => setInlineSectorTarget(e.target.value)}
+                          placeholder="Meta %"
+                          className="w-20 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right font-mono text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Cadastra o setor em {ASSET_CLASS_LABELS[form.assetClass]}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCreateInlineSector}
+                          disabled={savingInlineSector}
+                          className="rounded-lg bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                          {savingInlineSector ? "Criando..." : "Criar setor"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={form.sector}
+                      onChange={(e) => setForm({ ...form, sector: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    >
+                      <option value="" disabled>
+                        Selecione um setor...
+                      </option>
+                      {availableSectorsForFormClass.map((sectorName) => (
+                        <option key={sectorName} value={sectorName}>
+                          {sectorName}
+                        </option>
+                      ))}
+                    </select>
+                  )
+                ) : (
+                  <input
+                    required
+                    type="text"
+                    value={form.sector}
+                    onChange={(e) => setForm({ ...form, sector: e.target.value })}
+                    placeholder="Ex: Tesouro IPCA, CDB, Reserva..."
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

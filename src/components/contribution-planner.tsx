@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, CheckCircle2, Compass, PlusCircle } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Compass,
+  Layers,
+  PlusCircle,
+} from "lucide-react";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import {
   ASSET_CLASS_COLORS,
@@ -45,6 +51,10 @@ export function ContributionPlanner({
       ignoredClasses,
     });
   }, [summary, amountBRL, maxAssets, ignoredClasses]);
+
+  const uncoveredSectors = useMemo(() => {
+    return summary.sectors.filter((s) => s.status === "UNCOVERED");
+  }, [summary.sectors]);
 
   function toggleIgnoreClass(cls: InvestmentClassKey) {
     setIgnoredClasses((prev) =>
@@ -99,6 +109,45 @@ export function ContributionPlanner({
           lotes inteiros na B3 e frações (mín. US$ 5) nos EUA.
         </p>
       </div>
+
+      {uncoveredSectors.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div>
+                <p className="font-semibold">
+                  {uncoveredSectors.length} setor
+                  {uncoveredSectors.length === 1 ? "" : "es"} com meta definida
+                  ainda não possuem ativos cadastrados
+                </p>
+                <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
+                  O plano abaixo sugere apenas ativos já cadastrados na carteira.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {uncoveredSectors.map((s) => (
+                    <span
+                      key={`${s.assetClass}::${s.sector}`}
+                      className="rounded-lg bg-white/85 px-2.5 py-1 font-medium text-amber-900 dark:bg-slate-900/80 dark:text-amber-200"
+                    >
+                      {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}{" "}
+                      <span className="font-mono text-amber-700 dark:text-amber-400">
+                        (alvo {formatPct(s.goalTargetPct ?? 0, 1)})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/carteira"
+              className="shrink-0 font-semibold text-amber-800 hover:underline dark:text-amber-300"
+            >
+              Cadastrar na Carteira →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">

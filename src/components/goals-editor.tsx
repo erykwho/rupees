@@ -24,6 +24,7 @@ import {
   formatPct,
 } from "@/lib/domain/types";
 import { useTheme } from "@/components/theme-provider";
+import { SectorGoalsSection } from "@/components/sector-goals-section";
 import { cn } from "@/lib/utils";
 
 interface GoalsEditorProps {
@@ -430,6 +431,9 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
           ))}
         </div>
       </section>
+
+      {/* Sector Goals Section */}
+      <SectorGoalsSection initialSummary={summary} />
     </div>
   );
 }

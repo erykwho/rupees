@@ -102,6 +102,30 @@ export async function POST(request: Request) {
     await ensureAuditBackfill(user.id);
 
     const asset = await prisma.$transaction(async (tx) => {
+      if (
+        assetClass === "BR_STOCK" ||
+        assetClass === "BR_FII" ||
+        assetClass === "US_STOCK" ||
+        assetClass === "US_REIT"
+      ) {
+        await tx.sectorGoal.upsert({
+          where: {
+            userId_assetClass_name: {
+              userId: user.id,
+              assetClass,
+              name: sector,
+            },
+          },
+          update: {},
+          create: {
+            userId: user.id,
+            assetClass,
+            name: sector,
+            targetPct: 0,
+          },
+        });
+      }
+
       const created = await tx.asset.create({
         data: {
           userId: user.id,
