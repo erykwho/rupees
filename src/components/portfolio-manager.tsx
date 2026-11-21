@@ -1039,25 +1039,26 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
           </table>
         </div>
 
-        {/* Desktop / Tablet Full 7-Column Table */}
-        <div className="hidden overflow-x-auto md:block">
+        {/* Desktop / Tablet 6-Column Table */}
+        <div className="hidden md:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                <th className="px-5 py-3">Ativo</th>
-                <th className="px-4 py-3 text-right">Qtd</th>
-                <th className="px-4 py-3 text-right">Preço Médio</th>
-                <th className="px-4 py-3 text-right">Cotação</th>
-                <th className="px-4 py-3 text-right">Total (BRL)</th>
-                <th className="px-4 py-3 text-right">Alvo / Real</th>
-                <th className="px-5 py-3 text-right">Ações</th>
+                <th className="py-3 pl-4 pr-2 xl:pl-5 xl:pr-3">Ativo</th>
+                <th className="px-2 py-3 text-right xl:px-3">Qtd</th>
+                <th className="px-2 py-3 text-right xl:px-3">Cotação / PM</th>
+                <th className="px-2 py-3 text-right xl:px-3">Total (BRL)</th>
+                <th className="px-2 py-3 text-right xl:px-3">Alvo / Real</th>
+                <th className="py-3 pl-2 pr-4 text-right xl:pl-3 xl:pr-5">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredAssets.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500"
                   >
                     Nenhum ativo encontrado.
@@ -1077,12 +1078,12 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                         !a.isActive && "opacity-60"
                       )}
                     >
-                      <td className="px-5 py-3.5">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="py-3.5 pl-4 pr-2 xl:pl-5 xl:pr-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
                             {a.ticker}
                           </span>
-                          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                             {ASSET_CLASS_LABELS[a.assetClass]}
                           </span>
                           {!isFixedOrReserve &&
@@ -1111,25 +1112,27 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        <p className="mt-0.5 max-w-[170px] truncate text-xs text-slate-500 dark:text-slate-400 xl:max-w-[260px]">
                           {a.sector}
                         </p>
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono text-slate-700 tabular-nums dark:text-slate-300">
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono text-slate-700 tabular-nums dark:text-slate-300 xl:px-3">
                         {maskQty(a.quantity, isPrivate, a.assetClass)}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
-                        {a.quantity > 0
-                          ? formatCurrency(a.avgPriceNative, a.currency)
-                          : "—"}
-                      </td>
-
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono tabular-nums xl:px-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100">
                           {formatCurrency(a.currentPriceNative, a.currency)}
                         </div>
+                        {!isFixedOrReserve && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            PM{" "}
+                            {a.quantity > 0
+                              ? formatCurrency(a.avgPriceNative, a.currency)
+                              : "—"}
+                          </div>
+                        )}
                         {a.currency === "USD" && (
                           <div className="text-[11px] text-slate-400 dark:text-slate-500">
                             {formatBRL(a.currentPriceBRL)}
@@ -1137,7 +1140,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                         )}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono tabular-nums xl:px-3">
                         <div className="font-semibold text-slate-900 dark:text-slate-100">
                           {maskBRL(a.currentValueBRL, isPrivate)}
                         </div>
@@ -1156,7 +1159,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                         )}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono tabular-nums xl:px-3">
                         {a.assetClass === "EMERGENCY_RESERVE" ? (
                           <span className="text-xs text-slate-400 dark:text-slate-500">
                             Reserva
@@ -1176,14 +1179,14 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                         )}
                       </td>
 
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="inline-flex items-center gap-1">
+                      <td className="whitespace-nowrap py-3.5 pl-2 pr-4 text-right xl:pl-3 xl:pr-5">
+                        <div className="inline-flex items-center gap-0.5 xl:gap-1">
                           {isFixedOrReserve && (
                             <button
                               type="button"
                               onClick={() => openBalanceModal(a)}
                               title="Atualizar saldo / rendimento"
-                              className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
+                              className="rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
                             >
                               Saldo
                             </button>

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  ChevronDown,
   Pencil,
   Plus,
   Search,
@@ -86,6 +87,7 @@ export function TransactionsManager({
   const [typeFilter, setTypeFilter] = useState<TransactionTypeKey | "ALL">(
     "ALL"
   );
+  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(
     openNewByDefault && assets.length > 0
@@ -336,111 +338,311 @@ export function TransactionsManager({
       </div>
 
       {/* Transactions List */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="overflow-x-auto">
+      <div className="-mx-4 overflow-hidden border-y border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900 sm:-mx-6 md:mx-0 md:rounded-2xl md:border">
+        {/* Mobile Compact 3-Column Accordion Table */}
+        <div className="md:hidden">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                <th className="px-5 py-3">Data</th>
-                <th className="px-4 py-3">Ativo</th>
-                <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3 text-right">Qtd</th>
-                <th className="px-4 py-3 text-right">Preço Unit.</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-5 py-3 text-right">Ações</th>
+                <th className="py-3 pl-3 pr-1.5">Ativo / Data</th>
+                <th className="px-1.5 py-3">Tipo</th>
+                <th className="py-3 pl-1.5 pr-3 text-right">Valor</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={3}
+                    className="px-4 py-10 text-center text-sm text-slate-400 dark:text-slate-500"
+                  >
+                    Nenhum lançamento encontrado.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((tx) => {
+                  const isExpanded = expandedTxId === tx.id;
+                  const toggleExpanded = () =>
+                    setExpandedTxId((prev) => (prev === tx.id ? null : tx.id));
+                  const formattedDate = new Date(tx.date).toLocaleDateString(
+                    "pt-BR",
+                    { timeZone: "UTC" }
+                  );
+                  const isFixedOrAdjustment =
+                    isFixedIncomeClass(tx.asset.assetClass) ||
+                    tx.type === "BALANCE_ADJUSTMENT";
+
+                  return (
+                    <Fragment key={tx.id}>
+                      <tr
+                        onClick={toggleExpanded}
+                        className={cn(
+                          "cursor-pointer transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50",
+                          isExpanded && "bg-slate-50/60 dark:bg-slate-800/40"
+                        )}
+                      >
+                        <td className="py-3 pl-3 pr-1.5 align-top">
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? "Recolher" : "Expandir"} detalhes do lançamento de ${tx.asset.ticker}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpanded();
+                            }}
+                            className="inline-flex items-center gap-1 text-left font-mono font-bold text-slate-900 focus:outline-none dark:text-slate-100"
+                          >
+                            <span>{tx.asset.ticker}</span>
+                            <ChevronDown
+                              className={cn(
+                                "h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-150 dark:text-slate-500",
+                                isExpanded &&
+                                  "rotate-180 text-emerald-600 dark:text-emerald-400"
+                              )}
+                            />
+                          </button>
+                          <p className="mt-0.5 font-mono text-xs text-slate-500 tabular-nums dark:text-slate-400">
+                            {formattedDate}
+                          </p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-1.5 py-3 align-top">
+                          {tx.type === "BUY" && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                              <ArrowDownLeft className="h-3 w-3" />
+                              Compra
+                            </span>
+                          )}
+                          {tx.type === "SELL" && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                              <ArrowUpRight className="h-3 w-3" />
+                              Venda
+                            </span>
+                          )}
+                          {tx.type === "BALANCE_ADJUSTMENT" && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                              <SlidersHorizontal className="h-3 w-3" />
+                              Ajuste
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap py-3 pl-1.5 pr-3 text-right align-top font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                          {maskCurrency(
+                            tx.totalAmount,
+                            tx.asset.currency,
+                            isPrivate
+                          )}
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className="bg-slate-50/90 dark:bg-slate-800/40">
+                          <td colSpan={3} className="px-3 py-3">
+                            {!isFixedOrAdjustment && (
+                              <div className="mb-3 grid grid-cols-2 gap-3 font-mono tabular-nums">
+                                <div>
+                                  <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+                                    Quantidade
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {maskQty(
+                                      tx.quantity,
+                                      isPrivate,
+                                      tx.asset.assetClass
+                                    )}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+                                    Preço Unit.
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {formatCurrency(
+                                      tx.unitPrice,
+                                      tx.asset.currency
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {tx.notes && (
+                              <p className="mb-3 text-xs text-slate-600 dark:text-slate-300">
+                                <span className="font-medium text-slate-500 dark:text-slate-400">
+                                  Nota:{" "}
+                                </span>
+                                {tx.notes}
+                              </p>
+                            )}
+
+                            <div
+                              className={cn(
+                                "flex flex-wrap items-center justify-between gap-2",
+                                (!isFixedOrAdjustment || Boolean(tx.notes)) &&
+                                  "border-t border-slate-200/70 pt-2.5 dark:border-slate-700/70"
+                              )}
+                            >
+                              <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                {ASSET_CLASS_LABELS[tx.asset.assetClass]}
+                              </span>
+
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditModal(tx);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(tx);
+                                  }}
+                                  aria-label={`Remover lançamento de ${tx.asset.ticker}`}
+                                  title="Remover lançamento"
+                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-rose-900/60 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Desktop / Tablet 6-Column Table */}
+        <div className="hidden md:block">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                <th className="py-3 pl-4 pr-2 xl:pl-5 xl:pr-3">Data</th>
+                <th className="px-2 py-3 xl:px-3">Ativo</th>
+                <th className="px-2 py-3 xl:px-3">Tipo</th>
+                <th className="px-2 py-3 text-right xl:px-3">Qtd / Preço</th>
+                <th className="px-2 py-3 text-right xl:px-3">Total</th>
+                <th className="py-3 pl-2 pr-4 text-right xl:pl-3 xl:pr-5">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
                     className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500"
                   >
                     Nenhum lançamento encontrado.
                   </td>
                 </tr>
               ) : (
-                filtered.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
-                  >
-                    <td className="whitespace-nowrap px-5 py-3.5 font-mono text-xs text-slate-600 tabular-nums dark:text-slate-400">
-                      {new Date(tx.date).toLocaleDateString("pt-BR", {
-                        timeZone: "UTC",
-                      })}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {tx.asset.ticker}
-                        </span>
-                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          {ASSET_CLASS_LABELS[tx.asset.assetClass]}
-                        </span>
-                      </div>
-                      {tx.notes && (
-                        <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                          {tx.notes}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {tx.type === "BUY" && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                          <ArrowDownLeft className="h-3 w-3" />
-                          Compra
-                        </span>
-                      )}
-                      {tx.type === "SELL" && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
-                          <ArrowUpRight className="h-3 w-3" />
-                          Venda
-                        </span>
-                      )}
-                      {tx.type === "BALANCE_ADJUSTMENT" && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-                          <SlidersHorizontal className="h-3 w-3" />
-                          Ajuste
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-700 tabular-nums dark:text-slate-300">
-                      {maskQty(tx.quantity, isPrivate, tx.asset.assetClass)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
-                      {formatCurrency(tx.unitPrice, tx.asset.currency)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {maskCurrency(
-                        tx.totalAmount,
-                        tx.asset.currency,
-                        isPrivate
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(tx)}
-                          title="Editar lançamento"
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(tx)}
-                          title="Remover lançamento"
-                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-500 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((tx) => {
+                  const isFixedOrAdjustment =
+                    isFixedIncomeClass(tx.asset.assetClass) ||
+                    tx.type === "BALANCE_ADJUSTMENT";
+
+                  return (
+                    <tr
+                      key={tx.id}
+                      className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
+                    >
+                      <td className="whitespace-nowrap py-3.5 pl-4 pr-2 font-mono text-xs text-slate-600 tabular-nums dark:text-slate-400 xl:pl-5 xl:pr-3">
+                        {new Date(tx.date).toLocaleDateString("pt-BR", {
+                          timeZone: "UTC",
+                        })}
+                      </td>
+                      <td className="px-2 py-3.5 xl:px-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                            {tx.asset.ticker}
+                          </span>
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            {ASSET_CLASS_LABELS[tx.asset.assetClass]}
+                          </span>
+                        </div>
+                        {tx.notes && (
+                          <p
+                            title={tx.notes}
+                            className="mt-0.5 max-w-[170px] truncate text-xs text-slate-400 dark:text-slate-500 xl:max-w-[260px]"
+                          >
+                            {tx.notes}
+                          </p>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3.5 xl:px-3">
+                        {tx.type === "BUY" && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            <ArrowDownLeft className="h-3 w-3" />
+                            Compra
+                          </span>
+                        )}
+                        {tx.type === "SELL" && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                            <ArrowUpRight className="h-3 w-3" />
+                            Venda
+                          </span>
+                        )}
+                        {tx.type === "BALANCE_ADJUSTMENT" && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                            <SlidersHorizontal className="h-3 w-3" />
+                            Ajuste
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono tabular-nums xl:px-3">
+                        <div className="text-slate-700 dark:text-slate-300">
+                          {maskQty(tx.quantity, isPrivate, tx.asset.assetClass)}
+                        </div>
+                        {!isFixedOrAdjustment && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {formatCurrency(tx.unitPrice, tx.asset.currency)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100 xl:px-3">
+                        {maskCurrency(
+                          tx.totalAmount,
+                          tx.asset.currency,
+                          isPrivate
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap py-3.5 pl-2 pr-4 text-right xl:pl-3 xl:pr-5">
+                        <div className="inline-flex items-center gap-0.5 xl:gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(tx)}
+                            title="Editar lançamento"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(tx)}
+                            title="Remover lançamento"
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:text-slate-500 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
