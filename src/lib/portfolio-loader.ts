@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computePortfolioSummary } from "@/lib/domain/calculations";
 import { getQuotesForAssets } from "@/lib/quotes";
+import { ensureSectorGoalsBackfill } from "@/lib/sector-goals";
 import type {
   AssetClassKey,
   AssetInput,
@@ -8,8 +9,10 @@ import type {
   GoalInput,
   PortfolioSummary,
   PriceModeKey,
+  SectorGoalInput,
   TransactionInput,
   TransactionTypeKey,
+  VariableIncomeClassKey,
 } from "@/lib/domain/types";
 
 export async function loadUserPortfolio(
@@ -18,13 +21,20 @@ export async function loadUserPortfolio(
 ): Promise<{
   summary: PortfolioSummary;
   goal: GoalInput;
+  sectorGoals: SectorGoalInput[];
   refreshedQuotesCount: number;
 }> {
-  const [goalRow, assetRows, txRows] = await Promise.all([
+  await ensureSectorGoalsBackfill(userId);
+
+  const [goalRow, sectorGoalRows, assetRows, txRows] = await Promise.all([
     prisma.allocationGoal.upsert({
       where: { userId },
       update: {},
       create: { userId },
+    }),
+    prisma.sectorGoal.findMany({
+      where: { userId },
+      orderBy: [{ assetClass: "asc" }, { targetPct: "desc" }, { name: "asc" }],
     }),
     prisma.asset.findMany({
       where: { userId },
@@ -46,6 +56,13 @@ export async function loadUserPortfolio(
     usStocksPct: Number(goalRow.usStocksPct),
     usReitsPct: Number(goalRow.usReitsPct),
   };
+
+  const sectorGoals: SectorGoalInput[] = sectorGoalRows.map((sg) => ({
+    id: sg.id,
+    assetClass: sg.assetClass as VariableIncomeClassKey,
+    name: sg.name,
+    targetPct: Number(sg.targetPct),
+  }));
 
   const assets: AssetInput[] = assetRows.map((a) => ({
     id: a.id,
@@ -99,6 +116,7 @@ export async function loadUserPortfolio(
     assets: assetsWithFreshStatus,
     transactions,
     goal,
+    sectorGoals,
     quotes: quoteResult.quotes,
     usdBrl: quoteResult.usdBrl,
     usdBrlUpdatedAt: quoteResult.usdBrlUpdatedAt,
@@ -107,6 +125,7 @@ export async function loadUserPortfolio(
   return {
     summary,
     goal,
+    sectorGoals,
     refreshedQuotesCount: quoteResult.refreshedCount,
   };
 }

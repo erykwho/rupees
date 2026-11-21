@@ -91,6 +91,7 @@ export async function PATCH(
       parsed.data.ticker !== undefined
         ? normalizeTicker(parsed.data.ticker, nextClass)
         : existing.ticker;
+    const nextSector = parsed.data.sector ?? existing.sector;
     const nextCurrency =
       nextClass === "US_STOCK" || nextClass === "US_REIT" ? "USD" : "BRL";
     const isFixedIncome =
@@ -138,6 +139,30 @@ export async function PATCH(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      if (
+        nextClass === "BR_STOCK" ||
+        nextClass === "BR_FII" ||
+        nextClass === "US_STOCK" ||
+        nextClass === "US_REIT"
+      ) {
+        await tx.sectorGoal.upsert({
+          where: {
+            userId_assetClass_name: {
+              userId: user.id,
+              assetClass: nextClass,
+              name: nextSector,
+            },
+          },
+          update: {},
+          create: {
+            userId: user.id,
+            assetClass: nextClass,
+            name: nextSector,
+            targetPct: 0,
+          },
+        });
+      }
+
       const result = await tx.asset.update({
         where: { id: existing.id },
         data: {

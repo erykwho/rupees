@@ -3,6 +3,8 @@ import {
   computeAssetPosition,
   computeContributionPlan,
   computeDerivedClassTargets,
+  computeHierarchyForGoal,
+  computeNextRebalanceAssets,
   computePortfolioSummary,
 } from "./calculations";
 import type { AssetInput, GoalInput, TransactionInput } from "./types";
@@ -126,5 +128,138 @@ describe("computePortfolioSummary & computeContributionPlan", () => {
         expect(Number.isInteger(s.suggestedQty)).toBe(true);
       }
     }
+  });
+
+  it("prioritizes top 3 rebalance assets by class deficit first, then asset deficit, excluding emergency reserve", () => {
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      quotes,
+      usdBrl: 5,
+    });
+
+    // Total invested = 6000
+    // Targets: FI=600 (actual 1000, diff -400), BR_STOCK=2268 (actual 2000, need +268),
+    // BR_FII=972 (actual 0, need +972), US_STOCK=1512 (actual 3000, diff -1488), US_REIT=648 (actual 0, need +648)
+    // Priority order should be: KNRI11 (BR_FII, +972), VNQ (US_REIT, +648), WEGE3 (BR_STOCK, +268)
+    const nextAssets = computeNextRebalanceAssets(summary, 3);
+    expect(nextAssets.map((a) => a.ticker)).toEqual(["KNRI11", "VNQ", "WEGE3"]);
+    expect(nextAssets.every((a) => a.assetClass !== "EMERGENCY_RESERVE")).toBe(true);
+  });
+
+  it("recomputes hierarchy live when goal percentages change", () => {
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      quotes,
+      usdBrl: 5,
+    });
+
+    const updatedGoal: GoalInput = {
+      ...DEFAULT_GOAL,
+      fixedIncomePct: 30,
+      variableIncomePct: 70,
+      brazilPct: 50,
+      usaPct: 50,
+    };
+
+    const liveHierarchy = computeHierarchyForGoal(updatedGoal, summary.classes);
+    const fiRow = liveHierarchy.find((r) => r.key === "FIXED_INCOME");
+    const brRow = liveHierarchy.find((r) => r.key === "BRAZIL");
+
+    expect(fiRow?.targetPct).toBe(30);
+    // actual FI = 1000 / 6000 = 16.67%
+    expect(fiRow?.actualPct).toBeCloseTo(16.67, 1);
+    expect(fiRow?.diffPct).toBeCloseTo(16.67 - 30, 1);
+
+    expect(brRow?.targetPct).toBe(50);
+    // actual BR inside RV = 2000 / 5000 = 40%
+    expect(brRow?.actualPct).toBeCloseTo(40, 1);
+    expect(brRow?.diffPct).toBeCloseTo(-10, 1);
+  });
+
+  it("tracks sector goals including uncovered, under, exact, over, and untracked sectors", () => {
+    const extendedAssets: AssetInput[] = [
+      ...assets,
+      {
+        id: "5",
+        ticker: "CPFE3",
+        assetClass: "BR_STOCK",
+        sector: "Energia",
+        currency: "BRL",
+        targetPctInClass: 20,
+        priceMode: "AUTO_YAHOO",
+        manualPrice: null,
+        isActive: true,
+      },
+      {
+        id: "6",
+        ticker: "OLD3",
+        assetClass: "BR_STOCK",
+        sector: "Transporte",
+        currency: "BRL",
+        targetPctInClass: 10,
+        priceMode: "AUTO_YAHOO",
+        manualPrice: null,
+        isActive: false,
+      },
+    ];
+
+    const summary = computePortfolioSummary({
+      assets: extendedAssets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      sectorGoals: [
+        { id: "sg-ind", assetClass: "BR_STOCK", name: "Indústria", targetPct: 50 },
+        { id: "sg-eng", assetClass: "BR_STOCK", name: "Energia", targetPct: 30 },
+        { id: "sg-trn", assetClass: "BR_STOCK", name: "Transporte", targetPct: 20 },
+        { id: "sg-us", assetClass: "US_STOCK", name: "S&P 500", targetPct: 100 },
+      ],
+      quotes,
+      usdBrl: 5,
+    });
+
+    const brStockClass = summary.classes.find((c) => c.assetClass === "BR_STOCK");
+    expect(brStockClass?.hasSectorGoals).toBe(true);
+    expect(brStockClass?.sectorGoalSumInClass).toBe(100);
+
+    const fiClass = summary.classes.find((c) => c.assetClass === "FIXED_INCOME");
+    expect(fiClass?.hasSectorGoals).toBe(false);
+    expect(fiClass?.sectorGoalSumInClass).toBe(0);
+
+    const industria = summary.sectors.find(
+      (s) => s.assetClass === "BR_STOCK" && s.sector === "Indústria"
+    );
+    expect(industria?.status).toBe("OVER"); // WEGE3 has 100% vs goal 50%
+    expect(industria?.diffFromGoalPct).toBe(50);
+    expect(industria?.activeAssetCount).toBe(1);
+
+    const energia = summary.sectors.find(
+      (s) => s.assetClass === "BR_STOCK" && s.sector === "Energia"
+    );
+    expect(energia?.status).toBe("UNDER"); // CPFE3 has 20% vs goal 30%
+    expect(energia?.diffFromGoalPct).toBe(-10);
+
+    const transporte = summary.sectors.find(
+      (s) => s.assetClass === "BR_STOCK" && s.sector === "Transporte"
+    );
+    expect(transporte?.status).toBe("UNCOVERED"); // only inactive OLD3 -> 0 active assets
+    expect(transporte?.activeAssetCount).toBe(0);
+    expect(transporte?.totalAssetCount).toBe(1);
+    expect(transporte?.diffFromGoalPct).toBe(-20);
+
+    const sp500 = summary.sectors.find(
+      (s) => s.assetClass === "US_STOCK" && s.sector === "S&P 500"
+    );
+    expect(sp500?.status).toBe("EXACT");
+    expect(sp500?.diffFromGoalPct).toBe(0);
+
+    const fiSector = summary.sectors.find(
+      (s) => s.assetClass === "FIXED_INCOME" && s.sector === "Tesouro"
+    );
+    expect(fiSector?.status).toBe("UNTRACKED");
+    expect(fiSector?.goalTargetPct).toBeNull();
   });
 });

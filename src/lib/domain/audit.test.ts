@@ -285,4 +285,69 @@ describe("evaluateRevertEligibility", () => {
     });
     expect(res.canRevert).toBe(true);
   });
+
+  it("calcula diffs e bloqueia reversão de SECTOR_GOAL com ativos vinculados ou conflito de nome", () => {
+    const beforeSector = {
+      id: "sg1",
+      assetClass: "BR_STOCK" as const,
+      name: "Energia",
+      targetPct: 7,
+    };
+    const afterSector = {
+      id: "sg1",
+      assetClass: "BR_STOCK" as const,
+      name: "Energia Elétrica",
+      targetPct: 10,
+    };
+
+    const diffs = computeAuditDiffs("SECTOR_GOAL", beforeSector, afterSector);
+    expect(diffs.map((d) => d.key)).toEqual(["name", "targetPct"]);
+
+    const summary = buildEventSummary(
+      "SECTOR_GOAL",
+      "CREATE",
+      "Energia (Ação)",
+      null,
+      beforeSector
+    );
+    expect(summary).toContain("Novo setor: Energia");
+
+    const blockedDeleteCreate = evaluateRevertEligibility({
+      entityType: "SECTOR_GOAL",
+      action: "CREATE",
+      beforeState: null,
+      afterState: beforeSector,
+      isLatestForEntity: true,
+      isReverted: false,
+      currentEntityExists: true,
+      sectorHasLinkedAssets: true,
+    });
+    expect(blockedDeleteCreate.canRevert).toBe(false);
+    expect(blockedDeleteCreate.reason).toContain("ativos vinculados");
+
+    const blockedConflict = evaluateRevertEligibility({
+      entityType: "SECTOR_GOAL",
+      action: "DELETE",
+      beforeState: beforeSector,
+      afterState: null,
+      isLatestForEntity: true,
+      isReverted: false,
+      currentEntityExists: false,
+      sectorNameConflictExists: true,
+    });
+    expect(blockedConflict.canRevert).toBe(false);
+    expect(blockedConflict.reason).toContain("Energia");
+
+    const allowedUpdateRevert = evaluateRevertEligibility({
+      entityType: "SECTOR_GOAL",
+      action: "UPDATE",
+      beforeState: beforeSector,
+      afterState: afterSector,
+      isLatestForEntity: true,
+      isReverted: false,
+      currentEntityExists: true,
+      sectorNameConflictExists: false,
+    });
+    expect(allowedUpdateRevert.canRevert).toBe(true);
+  });
 });

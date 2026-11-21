@@ -11,6 +11,8 @@ import {
   INVESTMENT_CLASSES,
   type InvestmentClassKey,
   type PortfolioSummary,
+  type SectorCoverageStatus,
+  type SectorGoalInput,
   type SectorSummary,
   type TransactionInput,
   getYahooSymbol,
@@ -98,12 +100,20 @@ export function computePortfolioSummary(params: {
   assets: AssetInput[];
   transactions: TransactionInput[];
   goal: GoalInput;
+  sectorGoals?: SectorGoalInput[];
   quotes: Record<string, QuoteMapEntry>;
   usdBrl: number;
   usdBrlUpdatedAt?: string | null;
 }): PortfolioSummary {
-  const { assets, transactions, goal, quotes, usdBrl, usdBrlUpdatedAt = null } =
-    params;
+  const {
+    assets,
+    transactions,
+    goal,
+    sectorGoals = [],
+    quotes,
+    usdBrl,
+    usdBrlUpdatedAt = null,
+  } = params;
 
   const derivedTargets = computeDerivedClassTargets(goal);
 
@@ -238,6 +248,9 @@ export function computePortfolioSummary(params: {
     const classAssets = assetSummaries.filter(
       (a) => a.assetClass === assetClass
     );
+    const classSectorGoals = sectorGoals.filter(
+      (sg) => sg.assetClass === assetClass
+    );
     const currentValueBRL = classAssets.reduce(
       (sum, a) => sum + a.currentValueBRL,
       0
@@ -257,6 +270,10 @@ export function computePortfolioSummary(params: {
     const targetSumInClass = classAssets
       .filter((a) => a.isActive)
       .reduce((sum, a) => sum + a.targetPctInClass, 0);
+    const sectorGoalSumInClass = classSectorGoals.reduce(
+      (sum, sg) => sum + sg.targetPct,
+      0
+    );
 
     return {
       assetClass,
@@ -268,112 +285,113 @@ export function computePortfolioSummary(params: {
       diffPct,
       balanceNeededBRL,
       targetSumInClass: round2(targetSumInClass),
+      hasSectorGoals: classSectorGoals.length > 0,
+      sectorGoalSumInClass: round2(sectorGoalSumInClass),
     };
   });
 
   const classMap = new Map(classes.map((c) => [c.assetClass, c]));
-  const fiVal = classMap.get("FIXED_INCOME")?.currentValueBRL ?? 0;
-  const brStockVal = classMap.get("BR_STOCK")?.currentValueBRL ?? 0;
-  const brFiiVal = classMap.get("BR_FII")?.currentValueBRL ?? 0;
-  const usStockVal = classMap.get("US_STOCK")?.currentValueBRL ?? 0;
-  const usReitVal = classMap.get("US_REIT")?.currentValueBRL ?? 0;
-
-  const viVal = brStockVal + brFiiVal + usStockVal + usReitVal;
-  const brVal = brStockVal + brFiiVal;
-  const usVal = usStockVal + usReitVal;
-
   const pctOf = (part: number, whole: number) =>
     whole > EPSILON ? (part / whole) * 100 : 0;
 
-  const hierarchy: HierarchyRow[] = [
-    {
-      key: "FIXED_INCOME",
-      label: "Renda Fixa",
-      group: "MACRO",
-      targetPct: goal.fixedIncomePct,
-      actualPct: pctOf(fiVal, totalInvestedValueBRL),
-      diffPct: pctOf(fiVal, totalInvestedValueBRL) - goal.fixedIncomePct,
-    },
-    {
-      key: "VARIABLE_INCOME",
-      label: "Renda Variável",
-      group: "MACRO",
-      targetPct: goal.variableIncomePct,
-      actualPct: pctOf(viVal, totalInvestedValueBRL),
-      diffPct: pctOf(viVal, totalInvestedValueBRL) - goal.variableIncomePct,
-    },
-    {
-      key: "BRAZIL",
-      label: "Brasil",
-      group: "REGION",
-      targetPct: goal.brazilPct,
-      actualPct: pctOf(brVal, viVal),
-      diffPct: pctOf(brVal, viVal) - goal.brazilPct,
-    },
-    {
-      key: "USA",
-      label: "EUA",
-      group: "REGION",
-      targetPct: goal.usaPct,
-      actualPct: pctOf(usVal, viVal),
-      diffPct: pctOf(usVal, viVal) - goal.usaPct,
-    },
-    {
-      key: "BR_STOCK",
-      label: "Ações",
-      group: "BR",
-      targetPct: goal.brStocksPct,
-      actualPct: pctOf(brStockVal, brVal),
-      diffPct: pctOf(brStockVal, brVal) - goal.brStocksPct,
-    },
-    {
-      key: "BR_FII",
-      label: "FIIs",
-      group: "BR",
-      targetPct: goal.brFiisPct,
-      actualPct: pctOf(brFiiVal, brVal),
-      diffPct: pctOf(brFiiVal, brVal) - goal.brFiisPct,
-    },
-    {
-      key: "US_STOCK",
-      label: "Stocks",
-      group: "US",
-      targetPct: goal.usStocksPct,
-      actualPct: pctOf(usStockVal, usVal),
-      diffPct: pctOf(usStockVal, usVal) - goal.usStocksPct,
-    },
-    {
-      key: "US_REIT",
-      label: "REITs",
-      group: "US",
-      targetPct: goal.usReitsPct,
-      actualPct: pctOf(usReitVal, usVal),
-      diffPct: pctOf(usReitVal, usVal) - goal.usReitsPct,
-    },
-  ];
+  const hierarchy = computeHierarchyForGoal(goal, classes);
 
-  // Sector aggregation per investment class
+  // Sector aggregation per investment class (seeded with explicit SectorGoals)
   const sectorMap = new Map<string, SectorSummary>();
+
+  for (const sg of sectorGoals) {
+    const key = `${sg.assetClass}::${sg.name}`;
+    sectorMap.set(key, {
+      id: sg.id,
+      assetClass: sg.assetClass,
+      sector: sg.name,
+      currentValueBRL: 0,
+      goalTargetPct: round2(sg.targetPct),
+      targetPctInClass: 0,
+      actualPctInClass: 0,
+      activeAssetCount: 0,
+      totalAssetCount: 0,
+      assetTickers: [],
+      diffFromGoalPct: null,
+      status: "EXACT",
+    });
+  }
+
   for (const a of assetSummaries) {
     if (a.assetClass === "EMERGENCY_RESERVE") continue;
-    if (!a.isActive && a.currentValueBRL <= EPSILON) continue;
     const key = `${a.assetClass}::${a.sector}`;
-    const classTotal = classMap.get(a.assetClass)?.currentValueBRL ?? 0;
     const existing = sectorMap.get(key);
+
+    if (!existing && !a.isActive && a.currentValueBRL <= EPSILON) {
+      continue;
+    }
+
+    const classTotal = classMap.get(a.assetClass)?.currentValueBRL ?? 0;
+
     if (existing) {
       existing.currentValueBRL += a.currentValueBRL;
-      existing.targetPctInClass += a.isActive ? a.targetPctInClass : 0;
+      existing.totalAssetCount += 1;
+      if (a.isActive) {
+        existing.targetPctInClass += a.targetPctInClass;
+        existing.activeAssetCount += 1;
+        existing.assetTickers.push(a.ticker);
+      }
       existing.actualPctInClass = pctOf(existing.currentValueBRL, classTotal);
     } else {
       sectorMap.set(key, {
+        id: null,
         assetClass: a.assetClass,
         sector: a.sector,
         currentValueBRL: a.currentValueBRL,
+        goalTargetPct: null,
         targetPctInClass: a.isActive ? a.targetPctInClass : 0,
         actualPctInClass: pctOf(a.currentValueBRL, classTotal),
+        activeAssetCount: a.isActive ? 1 : 0,
+        totalAssetCount: 1,
+        assetTickers: a.isActive ? [a.ticker] : [],
+        diffFromGoalPct: null,
+        status: "UNTRACKED",
       });
     }
   }
+
+  const sectors = Array.from(sectorMap.values())
+    .map((s) => {
+      const targetPctInClass = round2(s.targetPctInClass);
+      let diffFromGoalPct: number | null = null;
+      let status: SectorCoverageStatus = "UNTRACKED";
+
+      if (s.goalTargetPct !== null) {
+        diffFromGoalPct = round2(targetPctInClass - s.goalTargetPct);
+        if (s.goalTargetPct > 0 && s.activeAssetCount === 0) {
+          status = "UNCOVERED";
+        } else if (Math.abs(diffFromGoalPct) <= 0.05) {
+          status = "EXACT";
+        } else if (diffFromGoalPct < 0) {
+          status = "UNDER";
+        } else {
+          status = "OVER";
+        }
+      }
+
+      return {
+        ...s,
+        targetPctInClass,
+        diffFromGoalPct,
+        status,
+      };
+    })
+    .sort((a, b) => {
+      if (Math.abs(b.currentValueBRL - a.currentValueBRL) > EPSILON) {
+        return b.currentValueBRL - a.currentValueBRL;
+      }
+      const aGoal = a.goalTargetPct ?? 0;
+      const bGoal = b.goalTargetPct ?? 0;
+      if (Math.abs(bGoal - aGoal) > EPSILON) {
+        return bGoal - aGoal;
+      }
+      return a.sector.localeCompare(b.sector, "pt-BR");
+    });
 
   return {
     usdBrl,
@@ -387,9 +405,7 @@ export function computePortfolioSummary(params: {
     classes,
     hierarchy,
     assets: assetSummaries,
-    sectors: Array.from(sectorMap.values()).sort(
-      (a, b) => b.currentValueBRL - a.currentValueBRL
-    ),
+    sectors,
   };
 }
 
@@ -557,6 +573,134 @@ export function computeContributionPlan(params: {
     usdBrl: summary.usdBrl,
     suggestions,
   };
+}
+
+export function computeHierarchyForGoal(
+  goal: GoalInput,
+  classes: ClassSummary[]
+): HierarchyRow[] {
+  const classMap = new Map(classes.map((c) => [c.assetClass, c]));
+  const fiVal = classMap.get("FIXED_INCOME")?.currentValueBRL ?? 0;
+  const brStockVal = classMap.get("BR_STOCK")?.currentValueBRL ?? 0;
+  const brFiiVal = classMap.get("BR_FII")?.currentValueBRL ?? 0;
+  const usStockVal = classMap.get("US_STOCK")?.currentValueBRL ?? 0;
+  const usReitVal = classMap.get("US_REIT")?.currentValueBRL ?? 0;
+
+  const viVal = brStockVal + brFiiVal + usStockVal + usReitVal;
+  const brVal = brStockVal + brFiiVal;
+  const usVal = usStockVal + usReitVal;
+  const totalInvestedValueBRL = fiVal + viVal;
+
+  const pctOf = (part: number, whole: number) =>
+    whole > EPSILON ? (part / whole) * 100 : 0;
+
+  return [
+    {
+      key: "FIXED_INCOME",
+      label: "Renda Fixa",
+      group: "MACRO",
+      targetPct: goal.fixedIncomePct,
+      actualPct: pctOf(fiVal, totalInvestedValueBRL),
+      diffPct: pctOf(fiVal, totalInvestedValueBRL) - goal.fixedIncomePct,
+    },
+    {
+      key: "VARIABLE_INCOME",
+      label: "Renda Variável",
+      group: "MACRO",
+      targetPct: goal.variableIncomePct,
+      actualPct: pctOf(viVal, totalInvestedValueBRL),
+      diffPct: pctOf(viVal, totalInvestedValueBRL) - goal.variableIncomePct,
+    },
+    {
+      key: "BRAZIL",
+      label: "Brasil",
+      group: "REGION",
+      targetPct: goal.brazilPct,
+      actualPct: pctOf(brVal, viVal),
+      diffPct: pctOf(brVal, viVal) - goal.brazilPct,
+    },
+    {
+      key: "USA",
+      label: "EUA",
+      group: "REGION",
+      targetPct: goal.usaPct,
+      actualPct: pctOf(usVal, viVal),
+      diffPct: pctOf(usVal, viVal) - goal.usaPct,
+    },
+    {
+      key: "BR_STOCK",
+      label: "Ações",
+      group: "BR",
+      targetPct: goal.brStocksPct,
+      actualPct: pctOf(brStockVal, brVal),
+      diffPct: pctOf(brStockVal, brVal) - goal.brStocksPct,
+    },
+    {
+      key: "BR_FII",
+      label: "FIIs",
+      group: "BR",
+      targetPct: goal.brFiisPct,
+      actualPct: pctOf(brFiiVal, brVal),
+      diffPct: pctOf(brFiiVal, brVal) - goal.brFiisPct,
+    },
+    {
+      key: "US_STOCK",
+      label: "Stocks",
+      group: "US",
+      targetPct: goal.usStocksPct,
+      actualPct: pctOf(usStockVal, usVal),
+      diffPct: pctOf(usStockVal, usVal) - goal.usStocksPct,
+    },
+    {
+      key: "US_REIT",
+      label: "REITs",
+      group: "US",
+      targetPct: goal.usReitsPct,
+      actualPct: pctOf(usReitVal, usVal),
+      diffPct: pctOf(usReitVal, usVal) - goal.usReitsPct,
+    },
+  ];
+}
+
+export function computeNextRebalanceAssets(
+  summary: PortfolioSummary,
+  limit = 3
+): AssetSummary[] {
+  const safeLimit = Math.max(0, Math.floor(limit));
+  if (safeLimit === 0) return [];
+
+  const classNeedMap = new Map<InvestmentClassKey, number>();
+  for (const c of summary.classes) {
+    classNeedMap.set(c.assetClass, c.balanceNeededBRL);
+  }
+
+  const candidates = summary.assets
+    .filter((a): a is AssetSummary & { assetClass: InvestmentClassKey } => {
+      if (a.assetClass === "EMERGENCY_RESERVE") return false;
+      if (!a.isActive) return false;
+      if (a.globalTargetPct <= 0) return false;
+      if (a.balanceNeededBRL <= EPSILON) return false;
+      return true;
+    })
+    .map((a) => ({
+      asset: a,
+      neededBRL: a.balanceNeededBRL,
+      classNeed: classNeedMap.get(a.assetClass) ?? 0,
+    }));
+
+  // Same priority rule as computeContributionPlan:
+  // under-allocated classes first, then largest class deficit, then largest asset deficit
+  candidates.sort((a, b) => {
+    const aClassDeficit = a.classNeed > 0 ? 1 : 0;
+    const bClassDeficit = b.classNeed > 0 ? 1 : 0;
+    if (aClassDeficit !== bClassDeficit) return bClassDeficit - aClassDeficit;
+    if (Math.abs(b.classNeed - a.classNeed) > 1) {
+      return b.classNeed - a.classNeed;
+    }
+    return b.neededBRL - a.neededBRL;
+  });
+
+  return candidates.slice(0, safeLimit).map((item) => item.asset);
 }
 
 function round2(n: number): number {

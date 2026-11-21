@@ -1,15 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, CheckCircle2, Compass, PlusCircle } from "lucide-react";
+import Link from "next/link";
+import {
+  Check,
+  CheckCircle2,
+  Compass,
+  Layers,
+  PlusCircle,
+} from "lucide-react";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import {
+  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   INVESTMENT_CLASSES,
   type ContributionSuggestion,
   type InvestmentClassKey,
   type PortfolioSummary,
   formatBRL,
+  formatPct,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskBRL, maskQty, maskUSD } from "@/lib/privacy";
@@ -42,6 +51,10 @@ export function ContributionPlanner({
       ignoredClasses,
     });
   }, [summary, amountBRL, maxAssets, ignoredClasses]);
+
+  const uncoveredSectors = useMemo(() => {
+    return summary.sectors.filter((s) => s.status === "UNCOVERED");
+  }, [summary.sectors]);
 
   function toggleIgnoreClass(cls: InvestmentClassKey) {
     setIgnoredClasses((prev) =>
@@ -96,6 +109,45 @@ export function ContributionPlanner({
           lotes inteiros na B3 e frações (mín. US$ 5) nos EUA.
         </p>
       </div>
+
+      {uncoveredSectors.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div>
+                <p className="font-semibold">
+                  {uncoveredSectors.length} setor
+                  {uncoveredSectors.length === 1 ? "" : "es"} com meta definida
+                  ainda não possuem ativos cadastrados
+                </p>
+                <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
+                  O plano abaixo sugere apenas ativos já cadastrados na carteira.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {uncoveredSectors.map((s) => (
+                    <span
+                      key={`${s.assetClass}::${s.sector}`}
+                      className="rounded-lg bg-white/85 px-2.5 py-1 font-medium text-amber-900 dark:bg-slate-900/80 dark:text-amber-200"
+                    >
+                      {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}{" "}
+                      <span className="font-mono text-amber-700 dark:text-amber-400">
+                        (alvo {formatPct(s.goalTargetPct ?? 0, 1)})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <Link
+              href="/carteira"
+              className="shrink-0 font-semibold text-amber-800 hover:underline dark:text-amber-300"
+            >
+              Cadastrar na Carteira →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
@@ -292,6 +344,100 @@ export function ContributionPlanner({
             })}
           </div>
         )}
+      </section>
+
+      {/* Allocation Table by Class */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Alocação por Classe
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Comparação entre objetivo definido e carteira atual
+            </p>
+          </div>
+          <Link
+            href="/objetivos"
+            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+          >
+            Alterar objetivos
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                <th className="px-5 py-3">Classe</th>
+                <th className="px-4 py-3 text-right">Objetivo</th>
+                <th className="px-4 py-3 text-right">Real</th>
+                <th className="px-4 py-3 text-right">Diff</th>
+                <th className="px-4 py-3 text-right">Investido</th>
+                <th className="px-5 py-3 text-right">Balancear</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {summary.classes.map((c) => {
+                const underTarget = c.balanceNeededBRL > 0;
+                return (
+                  <tr
+                    key={c.assetClass}
+                    className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
+                  >
+                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
+                      <span className="inline-flex items-center gap-2.5">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{
+                            backgroundColor: ASSET_CLASS_COLORS[c.assetClass],
+                          }}
+                        />
+                        {c.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
+                      {formatPct(c.targetPct)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                      {formatPct(c.actualPct)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-md px-2 py-0.5 text-xs font-semibold",
+                          c.diffPct < -0.5
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                            : c.diffPct > 0.5
+                              ? "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
+                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                        )}
+                      >
+                        {c.diffPct > 0 ? "+" : ""}
+                        {formatPct(c.diffPct)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono text-slate-800 tabular-nums dark:text-slate-200">
+                      {maskBRL(c.currentValueBRL, isPrivate)}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-5 py-3.5 text-right font-mono font-semibold tabular-nums",
+                        underTarget
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-slate-400 dark:text-slate-500"
+                      )}
+                    >
+                      {isPrivate
+                        ? maskBRL(c.balanceNeededBRL, true)
+                        : `${underTarget ? "+" : ""}${formatBRL(c.balanceNeededBRL)}`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );
