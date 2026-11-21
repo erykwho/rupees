@@ -104,7 +104,6 @@ interface EvolutionTooltipProps {
   activeClasses?: AssetClassKey[];
   chartMode?: EvolutionChartMode;
   isPrivate?: boolean;
-  showsEstimatedFixedIncome?: boolean;
 }
 
 function EvolutionTooltip({
@@ -114,7 +113,6 @@ function EvolutionTooltip({
   activeClasses = [],
   chartMode = "PATRIMONIO",
   isPrivate = false,
-  showsEstimatedFixedIncome = false,
 }: EvolutionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const pt = payload[0]?.payload;
@@ -123,13 +121,18 @@ function EvolutionTooltip({
   const isPositive = pt.profitLossBRL >= 0;
 
   return (
-    <div className="min-w-[220px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
-      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
-        {pt.tooltipLabel}
-      </p>
-      <div className="space-y-1.5 tabular-nums">
+    <div className="pointer-events-none hidden min-w-[180px] max-w-[240px] rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-2 text-[11px] shadow-md backdrop-blur-xs sm:block dark:border-slate-700 dark:bg-slate-900/95">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1 dark:border-slate-800">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {pt.tooltipLabel}
+        </span>
+        <span className="text-[10px] text-slate-400 tabular-nums dark:text-slate-500">
+          USD {formatBRL(pt.usdBrl)}
+        </span>
+      </div>
+      <div className="space-y-1 tabular-nums">
         {splitByClass && activeClasses.length > 1 && (
-          <div className="space-y-1 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+          <div className="space-y-0.5 border-b border-slate-100 pb-1 dark:border-slate-800">
             {activeClasses.map((cls) => {
               const value =
                 chartMode === "PATRIMONIO"
@@ -141,14 +144,14 @@ function EvolutionTooltip({
               return (
                 <div
                   key={cls}
-                  className="flex items-center justify-between gap-4"
+                  className="flex items-center justify-between gap-3"
                 >
-                  <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                  <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
                     <span
-                      className="h-2 w-2 rounded-full"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
                     />
-                    {ASSET_CLASS_LABELS[cls]}
+                    <span className="truncate">{ASSET_CLASS_LABELS[cls]}</span>
                   </span>
                   <span
                     className={cn(
@@ -172,25 +175,25 @@ function EvolutionTooltip({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-600" />
-            {splitByClass ? "Total Patrimônio" : "Patrimônio"}
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+            {splitByClass ? "Total" : "Patrimônio"}
           </span>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
             {maskBRL(pt.marketValueBRL, isPrivate)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-slate-400" />
-            {splitByClass ? "Total Aportado" : "Aportado"}
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            Aportado
           </span>
           <span className="font-medium text-slate-700 dark:text-slate-300">
             {maskBRL(pt.investedCostBRL, isPrivate)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-1 dark:border-slate-800">
           <span className="text-slate-600 dark:text-slate-400">Rendimento</span>
           <span
             className={cn(
@@ -204,16 +207,152 @@ function EvolutionTooltip({
             {formatPct(pt.profitLossPct, 1)})
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4 text-[11px] text-slate-400 dark:text-slate-500">
-          <span>Dólar (USDBRL)</span>
-          <span>{formatBRL(pt.usdBrl)}</span>
-        </div>
-        {showsEstimatedFixedIncome && (
-          <p className="pt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-            Renda Fixa/Reserva com ganho estimado líquido de IR
-          </p>
-        )}
       </div>
+    </div>
+  );
+}
+
+interface EvolutionMobileReadoutProps {
+  point: AggregatedEvolutionPoint | null;
+  isPointActive: boolean;
+  splitByClass: boolean;
+  activeClasses: AssetClassKey[];
+  chartMode: EvolutionChartMode;
+  isPrivate: boolean;
+}
+
+function EvolutionMobileReadout({
+  point,
+  isPointActive,
+  splitByClass,
+  activeClasses,
+  chartMode,
+  isPrivate,
+}: EvolutionMobileReadoutProps) {
+  if (!point) return null;
+  const isPositive = point.profitLossBRL >= 0;
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-2 text-[11px] tabular-nums transition-colors",
+        isPointActive
+          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/70 dark:bg-emerald-950/25"
+          : "border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/40"
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-2 border-b border-slate-200/60 pb-1 dark:border-slate-700/60">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {point.tooltipLabel}
+        </span>
+        <span className="text-[10px] text-slate-400 dark:text-slate-500">
+          USD {formatBRL(point.usdBrl)}
+        </span>
+      </div>
+
+      {splitByClass && activeClasses.length > 1 ? (
+        <div className="mt-1.5 space-y-1.5">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {activeClasses.map((cls) => {
+              const value =
+                chartMode === "PATRIMONIO"
+                  ? point.classMarketValue[cls]
+                  : chartMode === "GANHO"
+                    ? point.classProfitLoss[cls]
+                    : point.classProfitLossPct[cls];
+              const isPos = value >= 0;
+              return (
+                <div
+                  key={cls}
+                  className="flex items-center justify-between gap-1.5"
+                >
+                  <span className="flex min-w-0 items-center gap-1 text-slate-500 dark:text-slate-400">
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                    />
+                    <span className="truncate">{ASSET_CLASS_LABELS[cls]}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 font-medium",
+                      chartMode === "PATRIMONIO"
+                        ? "text-slate-900 dark:text-slate-100"
+                        : isPos
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                    )}
+                  >
+                    {chartMode === "RENTABILIDADE"
+                      ? `${isPos ? "+" : ""}${formatPct(value, 1)}`
+                      : chartMode === "GANHO"
+                        ? maskSignedBRL(value, isPrivate)
+                        : maskBRL(value, isPrivate)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-slate-200/60 pt-1 dark:border-slate-700/60">
+            <span className="text-slate-500 dark:text-slate-400">
+              Total{" "}
+              <strong className="text-slate-900 dark:text-slate-100">
+                {maskBRL(point.marketValueBRL, isPrivate)}
+              </strong>
+            </span>
+            <span
+              className={cn(
+                "font-semibold",
+                isPositive
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400"
+              )}
+            >
+              {maskSignedBRL(point.profitLossBRL, isPrivate)} (
+              {isPositive ? "+" : ""}
+              {formatPct(point.profitLossPct, 1)})
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+              Patrimônio
+            </span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
+              {maskBRL(point.marketValueBRL, isPrivate)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+              Aportado
+            </span>
+            <span className="font-medium text-slate-700 dark:text-slate-300">
+              {maskBRL(point.investedCostBRL, isPrivate)}
+            </span>
+          </div>
+          <div className="col-span-2 flex items-center justify-between gap-2 border-t border-slate-200/60 pt-1 dark:border-slate-700/60">
+            <span className="text-slate-500 dark:text-slate-400">
+              Rendimento
+            </span>
+            <span
+              className={cn(
+                "font-semibold",
+                isPositive
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400"
+              )}
+            >
+              {maskSignedBRL(point.profitLossBRL, isPrivate)} (
+              {isPositive ? "+" : ""}
+              {formatPct(point.profitLossPct, 1)})
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -240,29 +379,39 @@ function ContributionTooltip({
   );
 
   return (
-    <div className="min-w-[200px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
-      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
-        {row.tooltipLabel}
-      </p>
-      <div className="space-y-1 tabular-nums">
+    <div className="pointer-events-none hidden min-w-[165px] max-w-[225px] rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-2 text-[11px] shadow-md backdrop-blur-xs sm:block dark:border-slate-700 dark:bg-slate-900/95">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1 dark:border-slate-800">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {row.tooltipLabel}
+        </span>
+        <span
+          className={cn(
+            "font-semibold tabular-nums",
+            row.totalBRL >= 0
+              ? "text-emerald-700 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400"
+          )}
+        >
+          {maskSignedBRL(row.totalBRL, isPrivate)}
+        </span>
+      </div>
+      <div className="space-y-0.5 tabular-nums">
         {nonZeroClasses.length === 0 ? (
-          <p className="text-slate-400 dark:text-slate-500">
-            Sem movimentação no período
-          </p>
+          <p className="text-slate-400 dark:text-slate-500">Sem movimentação</p>
         ) : (
           nonZeroClasses.map((cls) => {
             const val = row[cls];
             return (
               <div
                 key={cls}
-                className="flex items-center justify-between gap-4"
+                className="flex items-center justify-between gap-3"
               >
-                <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
                   <span
-                    className="h-2 w-2 rounded-full"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
                   />
-                  {ASSET_CLASS_LABELS[cls]}
+                  <span className="truncate">{ASSET_CLASS_LABELS[cls]}</span>
                 </span>
                 <span
                   className={cn(
@@ -278,20 +427,86 @@ function ContributionTooltip({
             );
           })
         )}
-        <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 font-semibold dark:border-slate-800">
-          <span className="text-slate-700 dark:text-slate-300">
-            Total líquido
+      </div>
+    </div>
+  );
+}
+
+interface ContributionMobileReadoutProps {
+  row: AggregatedContributionPoint | null;
+  isPointActive: boolean;
+  activeClasses: AssetClassKey[];
+  isPrivate: boolean;
+}
+
+function ContributionMobileReadout({
+  row,
+  isPointActive,
+  activeClasses,
+  isPrivate,
+}: ContributionMobileReadoutProps) {
+  if (!row) return null;
+
+  const nonZeroClasses = activeClasses.filter(
+    (cls) => Math.abs(row[cls]) > 0.005
+  );
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-2 text-[11px] tabular-nums transition-colors",
+        isPointActive
+          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/70 dark:bg-emerald-950/25"
+          : "border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/40"
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {row.tooltipLabel}
+        </span>
+        <span
+          className={cn(
+            "font-semibold",
+            row.totalBRL >= 0
+              ? "text-emerald-700 dark:text-emerald-400"
+              : "text-rose-600 dark:text-rose-400"
+          )}
+        >
+          {maskSignedBRL(row.totalBRL, isPrivate)}
+        </span>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+        {nonZeroClasses.length === 0 ? (
+          <span className="text-slate-400 dark:text-slate-500">
+            Sem movimentação no período
           </span>
-          <span
-            className={cn(
-              row.totalBRL >= 0
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-rose-600 dark:text-rose-400"
-            )}
-          >
-            {maskSignedBRL(row.totalBRL, isPrivate)}
-          </span>
-        </div>
+        ) : (
+          nonZeroClasses.map((cls) => {
+            const val = row[cls];
+            return (
+              <span
+                key={cls}
+                className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300"
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                />
+                {ASSET_CLASS_LABELS[cls]}:{" "}
+                <strong
+                  className={cn(
+                    "font-semibold",
+                    val >= 0
+                      ? "text-slate-800 dark:text-slate-100"
+                      : "text-rose-600 dark:text-rose-400"
+                  )}
+                >
+                  {maskSignedBRL(val, isPrivate)}
+                </strong>
+              </span>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -804,12 +1019,23 @@ export function EvolutionView({
                   isInteracting={evolutionZoom.isInteracting}
                   rangeLabel={evolutionZoom.rangeLabel}
                   onResetZoom={evolutionZoom.resetZoom}
+                  mobileReadout={
+                    <EvolutionMobileReadout
+                      point={evolutionZoom.displayPoint}
+                      isPointActive={evolutionZoom.isPointActive}
+                      splitByClass={splitByClass && activeClasses.length > 1}
+                      activeClasses={activeClasses}
+                      chartMode={chartMode}
+                      isPrivate={isPrivate}
+                    />
+                  }
                   className="h-80"
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={evolutionZoom.visibleData}
                       margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+                      {...evolutionZoom.chartEventHandlers}
                     >
                       <defs>
                         <linearGradient
@@ -897,18 +1123,20 @@ export function EvolutionView({
                         }
                       />
                       <Tooltip
-                        wrapperStyle={
-                          evolutionZoom.isInteracting
+                        offset={28}
+                        position={{ y: 4 }}
+                        wrapperStyle={{
+                          pointerEvents: "none",
+                          ...(evolutionZoom.isInteracting
                             ? { display: "none" }
-                            : undefined
-                        }
+                            : {}),
+                        }}
                         content={
                           <EvolutionTooltip
                             splitByClass={splitByClass && activeClasses.length > 1}
                             activeClasses={activeClasses}
                             chartMode={chartMode}
                             isPrivate={isPrivate}
-                            showsEstimatedFixedIncome={showsEstimatedFixedIncome}
                           />
                         }
                       />
@@ -1154,6 +1382,14 @@ export function EvolutionView({
                   isInteracting={contributionZoom.isInteracting}
                   rangeLabel={contributionZoom.rangeLabel}
                   onResetZoom={contributionZoom.resetZoom}
+                  mobileReadout={
+                    <ContributionMobileReadout
+                      row={contributionZoom.displayPoint}
+                      isPointActive={contributionZoom.isPointActive}
+                      activeClasses={activeClasses}
+                      isPrivate={isPrivate}
+                    />
+                  }
                   className="h-72"
                 >
                   <ResponsiveContainer width="100%" height="100%">
@@ -1161,6 +1397,7 @@ export function EvolutionView({
                       data={contributionZoom.visibleData}
                       margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
                       stackOffset="sign"
+                      {...contributionZoom.chartEventHandlers}
                     >
                       <CartesianGrid
                         strokeDasharray="3 3"
@@ -1185,11 +1422,14 @@ export function EvolutionView({
                       />
                       <ReferenceLine y={0} stroke={refLineStroke} />
                       <Tooltip
-                        wrapperStyle={
-                          contributionZoom.isInteracting
+                        offset={28}
+                        position={{ y: 4 }}
+                        wrapperStyle={{
+                          pointerEvents: "none",
+                          ...(contributionZoom.isInteracting
                             ? { display: "none" }
-                            : undefined
-                        }
+                            : {}),
+                        }}
                         content={
                           <ContributionTooltip
                             activeClasses={activeClasses}

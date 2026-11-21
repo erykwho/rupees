@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import type { MouseHandlerDataParam } from "recharts";
 import {
   type ChartZoomWindow,
   clampZoomWindow,
@@ -39,6 +40,18 @@ export interface UseChartZoomResult<T> {
   isInteracting: boolean;
   rangeLabel: string | null;
   resetZoom: () => void;
+  /** Currently inspected point, or falls back to the last visible point. */
+  displayPoint: T | null;
+  /** True when the user is actively inspecting a specific point (touch/hover/tap). */
+  isPointActive: boolean;
+  /** Spread onto Recharts AreaChart/BarChart to sync the mobile fixed readout. */
+  chartEventHandlers: {
+    onMouseMove: (state: MouseHandlerDataParam) => void;
+    onMouseLeave: () => void;
+    onTouchStart: (state: MouseHandlerDataParam) => void;
+    onTouchMove: (state: MouseHandlerDataParam) => void;
+    onClick: (state: MouseHandlerDataParam) => void;
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -406,12 +419,16 @@ export function useChartZoom<T>(
     };
   }, [commitWindow, plotLeftInset, plotRightInset, resetZoom]);
 
-  const { visibleData, rangeLabel } = useMemo(() => {
+  const { visibleData, rangeLabel, sliceKey } = useMemo(() => {
     if (totalPoints === 0) {
-      return { visibleData: data, rangeLabel: null };
+      return { visibleData: data, rangeLabel: null, sliceKey: `${resetKey}|0|0` };
     }
     if (!isZoomed) {
-      return { visibleData: data, rangeLabel: null };
+      return {
+        visibleData: data,
+        rangeLabel: null,
+        sliceKey: `${resetKey}|0|${totalPoints - 1}`,
+      };
     }
 
     const { startIndex, endIndex } = getVisibleSliceBounds(
@@ -425,8 +442,72 @@ export function useChartZoom<T>(
       const last = getRangeLabel(sliced[sliced.length - 1]);
       label = first === last ? first : `${first} – ${last}`;
     }
-    return { visibleData: sliced, rangeLabel: label };
-  }, [data, effectiveWindow, getRangeLabel, isZoomed, totalPoints]);
+    return {
+      visibleData: sliced,
+      rangeLabel: label,
+      sliceKey: `${resetKey}|${startIndex}|${endIndex}`,
+    };
+  }, [data, effectiveWindow, getRangeLabel, isZoomed, resetKey, totalPoints]);
+
+  const [activeSelection, setActiveSelection] = useState<{
+    sliceKey: string;
+    index: number;
+  } | null>(null);
+
+  const sliceKeyRef = useRef(sliceKey);
+  const visibleLengthRef = useRef(visibleData.length);
+  const isInteractingRef = useRef(isInteracting);
+
+  useEffect(() => {
+    sliceKeyRef.current = sliceKey;
+    visibleLengthRef.current = visibleData.length;
+    isInteractingRef.current = isInteracting;
+  }, [sliceKey, visibleData.length, isInteracting]);
+
+  const updateActiveFromChart = useCallback((state: MouseHandlerDataParam) => {
+    if (isInteractingRef.current) return;
+    const raw = state?.activeTooltipIndex;
+    const idx = typeof raw === "number" ? raw : Number(raw);
+    if (
+      Number.isInteger(idx) &&
+      idx >= 0 &&
+      idx < visibleLengthRef.current
+    ) {
+      setActiveSelection({ sliceKey: sliceKeyRef.current, index: idx });
+    }
+  }, []);
+
+  const clearActiveFromChart = useCallback(() => {
+    setActiveSelection(null);
+  }, []);
+
+  const chartEventHandlers = useMemo(
+    () => ({
+      onMouseMove: updateActiveFromChart,
+      onMouseLeave: clearActiveFromChart,
+      onTouchStart: updateActiveFromChart,
+      onTouchMove: updateActiveFromChart,
+      onClick: updateActiveFromChart,
+    }),
+    [updateActiveFromChart, clearActiveFromChart]
+  );
+
+  const activeIndex =
+    !isInteracting &&
+    activeSelection &&
+    activeSelection.sliceKey === sliceKey &&
+    activeSelection.index >= 0 &&
+    activeSelection.index < visibleData.length
+      ? activeSelection.index
+      : null;
+
+  const isPointActive = activeIndex !== null;
+  const displayPoint =
+    visibleData.length === 0
+      ? null
+      : activeIndex !== null
+        ? visibleData[activeIndex]
+        : visibleData[visibleData.length - 1];
 
   return {
     containerRef,
@@ -435,6 +516,9 @@ export function useChartZoom<T>(
     isInteracting,
     rangeLabel,
     resetZoom,
+    displayPoint,
+    isPointActive,
+    chartEventHandlers,
   };
 }
 
@@ -444,6 +528,8 @@ interface ZoomableChartContainerProps {
   isInteracting: boolean;
   rangeLabel: string | null;
   onResetZoom: () => void;
+  /** Compact fixed readout strip shown above the chart on mobile (< sm). */
+  mobileReadout?: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }
@@ -454,11 +540,13 @@ export function ZoomableChartContainer({
   isInteracting,
   rangeLabel,
   onResetZoom,
+  mobileReadout,
   className,
   children,
 }: ZoomableChartContainerProps) {
   return (
     <div>
+      {mobileReadout && <div className="mb-2.5 sm:hidden">{mobileReadout}</div>}
       {isZoomed && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           {rangeLabel ? (
