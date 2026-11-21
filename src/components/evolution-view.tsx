@@ -49,6 +49,7 @@ import {
   formatDateFullPTBR,
 } from "@/lib/domain/evolution";
 import type { FixedIncomeInitialData } from "@/lib/fixed-income-loader";
+import { CompactKpiStrip } from "@/components/compact-kpi-strip";
 import { FixedIncomeProjectionView } from "@/components/fixed-income-projection-view";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
@@ -624,106 +625,78 @@ export function EvolutionView({
             </div>
           </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {/* Patrimônio */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-                <span>Patrimônio Atual</span>
-                <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-                {maskBRL(kpis.currentMarketValueBRL, isPrivate)}
-              </p>
-              <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                {selectionDescription}
-              </p>
-            </div>
-
-            {/* Aportado */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-                <span>
-                  {kpis.isSubPeriod ? "Aportado no Período" : "Custo Aportado"}
-                </span>
-                <Coins className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              </div>
-              <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-                {maskBRL(
+          {/* KPI Strip */}
+          <CompactKpiStrip
+            columns={4}
+            items={[
+              {
+                id: "market-value",
+                label: "Patrimônio Atual",
+                value: maskBRL(kpis.currentMarketValueBRL, isPrivate),
+                icon: (
+                  <Wallet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                ),
+                subtext: !isTotalSelected ? selectionDescription : null,
+              },
+              {
+                id: "cost",
+                label: kpis.isSubPeriod
+                  ? "Aportado no Período"
+                  : "Custo Aportado",
+                value: maskBRL(
                   kpis.isSubPeriod
                     ? kpis.periodContributionBRL
                     : kpis.totalInvestedCostBRL,
                   isPrivate
-                )}
-              </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                {kpis.isSubPeriod
-                  ? `Custo acumulado: ${maskBRL(kpis.totalInvestedCostBRL, isPrivate)}`
-                  : `Aporte líquido: ${maskBRL(kpis.periodContributionBRL, isPrivate)}`}
-              </p>
-            </div>
-
-            {/* Rendimento R$ */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-                <span>
-                  {kpis.isSubPeriod
-                    ? "Rendimento no Período"
-                    : "Rendimento Acumulado"}
-                </span>
-                {isGainPositive ? (
-                  <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                ),
+                icon: (
+                  <Coins className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                ),
+                subtext: kpis.isSubPeriod
+                  ? `Acum.: ${maskBRL(kpis.totalInvestedCostBRL, isPrivate)}`
+                  : null,
+              },
+              {
+                id: "gain",
+                label: kpis.isSubPeriod
+                  ? "Rendimento no Período"
+                  : "Rendimento Acumulado",
+                value: maskSignedBRL(gainValue, isPrivate),
+                icon: isGainPositive ? (
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                )}
-              </div>
-              <p
-                className={cn(
-                  "mt-2 text-2xl font-bold tracking-tight tabular-nums",
-                  isGainPositive
-                    ? "text-emerald-700 dark:text-emerald-400"
-                    : "text-rose-600 dark:text-rose-400"
-                )}
-              >
-                {maskSignedBRL(gainValue, isPrivate)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                {kpis.isSubPeriod
-                  ? `Acumulado total: ${maskSignedBRL(kpis.totalProfitLossBRL, isPrivate)}`
-                  : "Patrimônio menos custo aportado"}
-              </p>
-            </div>
-
-            {/* Rentabilidade % */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-                <span>Rentabilidade Acumulada</span>
-                {isTotalReturnPositive ? (
-                  <ArrowUpRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <TrendingDown className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                ),
+                valueClassName: isGainPositive
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400",
+                subtext: kpis.isSubPeriod
+                  ? `Acum.: ${maskSignedBRL(kpis.totalProfitLossBRL, isPrivate)}`
+                  : null,
+              },
+              {
+                id: "return-pct",
+                label: "Rentabilidade Acumulada",
+                value: `${isTotalReturnPositive ? "+" : ""}${formatPct(
+                  kpis.totalProfitLossPct,
+                  2
+                )}`,
+                icon: isTotalReturnPositive ? (
+                  <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <ArrowDownRight className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                )}
-              </div>
-              <p
-                className={cn(
-                  "mt-2 text-2xl font-bold tracking-tight tabular-nums",
-                  isTotalReturnPositive
-                    ? "text-emerald-700 dark:text-emerald-400"
-                    : "text-rose-600 dark:text-rose-400"
-                )}
-              >
-                {isTotalReturnPositive ? "+" : ""}
-                {formatPct(kpis.totalProfitLossPct, 2)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                {kpis.isSubPeriod
-                  ? `No período: ${
+                  <ArrowDownRight className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                ),
+                valueClassName: isTotalReturnPositive
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-rose-600 dark:text-rose-400",
+                subtext: kpis.isSubPeriod
+                  ? `Período: ${
                       kpis.periodReturnPct >= 0 ? "+" : ""
                     }${formatPct(kpis.periodReturnPct, 2)}`
-                  : "Sobre o custo total aportado"}
-              </p>
-            </div>
-          </div>
+                  : null,
+              },
+            ]}
+          />
 
           {/* Chart 1: Patrimônio vs Aportado / Ganho / Rentabilidade */}
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">

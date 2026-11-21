@@ -34,6 +34,7 @@ import {
   formatPct,
   isVariableIncomeClass,
 } from "@/lib/domain/types";
+import { CompactKpiStrip } from "@/components/compact-kpi-strip";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
 import { maskBRL } from "@/lib/privacy";
@@ -186,52 +187,38 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Patrimônio Investido</span>
-            <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {maskBRL(summary.totalInvestedValueBRL, isPrivate)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Carteira de longo prazo
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Reserva de Emergência</span>
-            <Shield className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-          </div>
-          <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {maskBRL(summary.emergencyReserveBRL, isPrivate)}
-          </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Separada do balanceamento
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
-            <span>Total + Reserva</span>
-            <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {maskBRL(summary.grandTotalBRL, isPrivate)}
-          </p>
-          <Link
-            href="/aporte"
-            className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-          >
-            <Compass className="h-3.5 w-3.5" />
-            Simular próximo aporte
-            <ArrowUpRight className="h-3 w-3" />
-          </Link>
-        </div>
-      </div>
+      {/* KPI Strip */}
+      <CompactKpiStrip
+        columns={3}
+        items={[
+          {
+            id: "invested",
+            label: "Patrimônio Investido",
+            value: maskBRL(summary.totalInvestedValueBRL, isPrivate),
+            icon: (
+              <Wallet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            ),
+          },
+          {
+            id: "reserve",
+            label: "Reserva de Emergência",
+            value: maskBRL(summary.emergencyReserveBRL, isPrivate),
+            icon: (
+              <Shield className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+            ),
+          },
+          {
+            id: "grand-total",
+            label: "Total + Reserva",
+            value: maskBRL(summary.grandTotalBRL, isPrivate),
+            icon: (
+              <DollarSign className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            ),
+            highlighted: true,
+            mobileFullRow: true,
+          },
+        ]}
+      />
 
       {/* Next 3 Assets to Rebalance */}
       <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
