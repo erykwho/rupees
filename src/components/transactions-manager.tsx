@@ -15,8 +15,11 @@ import {
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   type CurrencyCode,
+  FIXED_INCOME_INDEX_LABELS,
+  type FixedIncomeIndexKey,
   type TransactionTypeKey,
   formatCurrency,
+  isFixedIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskCurrency, maskQty } from "@/lib/privacy";
@@ -30,6 +33,7 @@ export interface TransactionRow {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
+  fixedIncomeRate?: number | null;
   notes: string | null;
   asset: {
     id: string;
@@ -37,6 +41,8 @@ export interface TransactionRow {
     assetClass: AssetClassKey;
     currency: CurrencyCode;
     sector: string;
+    fixedIncomeIndex?: FixedIncomeIndexKey | null;
+    fixedIncomeRate?: number | null;
   };
 }
 
@@ -45,6 +51,8 @@ export interface SimpleAssetOption {
   ticker: string;
   assetClass: AssetClassKey;
   currency: CurrencyCode;
+  fixedIncomeIndex?: FixedIncomeIndexKey | null;
+  fixedIncomeRate?: number | null;
 }
 
 interface TransactionsManagerProps {
@@ -61,6 +69,7 @@ interface TxFormState {
   quantity: string;
   unitPrice: string;
   totalAmount: string;
+  fixedIncomeRate: string;
   notes: string;
 }
 
@@ -91,10 +100,15 @@ export function TransactionsManager({
     quantity: "",
     unitPrice: "",
     totalAmount: "",
+    fixedIncomeRate: "",
     notes: "",
   });
 
   const selectedAsset = assets.find((a) => a.id === form.assetId);
+  const showFixedIncomeRateInput =
+    form.type === "BUY" &&
+    selectedAsset !== undefined &&
+    isFixedIncomeClass(selectedAsset.assetClass);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -128,6 +142,7 @@ export function TransactionsManager({
       quantity: "",
       unitPrice: "",
       totalAmount: "",
+      fixedIncomeRate: "",
       notes: "",
     });
     setModalOpen(true);
@@ -143,6 +158,10 @@ export function TransactionsManager({
       quantity: String(tx.quantity),
       unitPrice: String(tx.unitPrice),
       totalAmount: String(tx.totalAmount),
+      fixedIncomeRate:
+        tx.fixedIncomeRate !== undefined && tx.fixedIncomeRate !== null
+          ? String(tx.fixedIncomeRate)
+          : "",
       notes: tx.notes ?? "",
     });
     setModalOpen(true);
@@ -174,6 +193,10 @@ export function TransactionsManager({
     setError(null);
 
     try {
+      const parsedLotRate = form.fixedIncomeRate.trim()
+        ? Number(form.fixedIncomeRate.replace(",", "."))
+        : null;
+
       const payload = {
         assetId: form.assetId,
         date: form.date,
@@ -181,6 +204,12 @@ export function TransactionsManager({
         quantity: Number(form.quantity.replace(",", ".")),
         unitPrice: Number(form.unitPrice.replace(",", ".")) || 0,
         totalAmount: Number(form.totalAmount.replace(",", ".")) || 0,
+        fixedIncomeRate:
+          showFixedIncomeRateInput &&
+          parsedLotRate !== null &&
+          Number.isFinite(parsedLotRate)
+            ? parsedLotRate
+            : null,
         notes: form.notes.trim() || null,
       };
 
@@ -536,6 +565,31 @@ export function TransactionsManager({
                   />
                 </div>
               </div>
+
+              {showFixedIncomeRateInput && (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Taxa contratada do lote (%) — opcional
+                    {selectedAsset?.fixedIncomeIndex
+                      ? ` (${FIXED_INCOME_INDEX_LABELS[selectedAsset.fixedIncomeIndex]})`
+                      : ""}
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={form.fixedIncomeRate}
+                    onChange={(e) =>
+                      setForm({ ...form, fixedIncomeRate: e.target.value })
+                    }
+                    placeholder={
+                      selectedAsset?.fixedIncomeRate != null
+                        ? `Padrão do ativo: ${selectedAsset.fixedIncomeRate}%`
+                        : "Deixe em branco para usar a taxa padrão do ativo"
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">

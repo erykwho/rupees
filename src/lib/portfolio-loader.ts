@@ -57,6 +57,11 @@ export async function loadUserPortfolio(
     priceMode: a.priceMode as PriceModeKey,
     manualPrice: a.manualPrice !== null ? Number(a.manualPrice) : null,
     isActive: a.isActive,
+    fixedIncomeIndex: a.fixedIncomeIndex ?? null,
+    fixedIncomeRate:
+      a.fixedIncomeRate !== null ? Number(a.fixedIncomeRate) : null,
+    maturityDate: a.maturityDate ? a.maturityDate.toISOString().slice(0, 10) : null,
+    taxExempt: a.taxExempt,
   }));
 
   const transactions: TransactionInput[] = txRows.map((t) => ({
@@ -67,6 +72,8 @@ export async function loadUserPortfolio(
     quantity: Number(t.quantity),
     unitPrice: Number(t.unitPrice),
     totalAmount: Number(t.totalAmount),
+    fixedIncomeRate:
+      t.fixedIncomeRate !== null ? Number(t.fixedIncomeRate) : null,
     notes: t.notes,
   }));
 

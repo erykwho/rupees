@@ -51,6 +51,13 @@ export function toAssetSnapshot(
     priceMode: asset.priceMode as PriceModeKey,
     manualPrice: asset.manualPrice !== null ? Number(asset.manualPrice) : null,
     isActive: asset.isActive,
+    fixedIncomeIndex: asset.fixedIncomeIndex ?? null,
+    fixedIncomeRate:
+      asset.fixedIncomeRate !== null ? Number(asset.fixedIncomeRate) : null,
+    maturityDate: asset.maturityDate
+      ? asset.maturityDate.toISOString().slice(0, 10)
+      : null,
+    taxExempt: asset.taxExempt,
   };
   if (cascadeTransactions && cascadeTransactions.length > 0) {
     snapshot.cascadeTransactions = cascadeTransactions;
@@ -72,6 +79,8 @@ export function toTransactionSnapshot(
     quantity: Number(tx.quantity),
     unitPrice: Number(tx.unitPrice),
     totalAmount: Number(tx.totalAmount),
+    fixedIncomeRate:
+      tx.fixedIncomeRate !== null ? Number(tx.fixedIncomeRate) : null,
     notes: tx.notes,
   };
 }
@@ -618,6 +627,12 @@ export async function revertAuditEvent(
             priceMode: before.priceMode,
             manualPrice: before.manualPrice,
             isActive: before.isActive,
+            fixedIncomeIndex: before.fixedIncomeIndex ?? null,
+            fixedIncomeRate: before.fixedIncomeRate ?? null,
+            maturityDate: before.maturityDate
+              ? new Date(`${before.maturityDate.slice(0, 10)}T12:00:00.000Z`)
+              : null,
+            taxExempt: Boolean(before.taxExempt),
           },
         });
 
@@ -632,6 +647,7 @@ export async function revertAuditEvent(
               quantity: t.quantity,
               unitPrice: t.unitPrice,
               totalAmount: t.totalAmount,
+              fixedIncomeRate: t.fixedIncomeRate ?? null,
               notes: t.notes,
             })),
           });
@@ -653,6 +669,12 @@ export async function revertAuditEvent(
             priceMode: before.priceMode,
             manualPrice: before.manualPrice,
             isActive: before.isActive,
+            fixedIncomeIndex: before.fixedIncomeIndex ?? null,
+            fixedIncomeRate: before.fixedIncomeRate ?? null,
+            maturityDate: before.maturityDate
+              ? new Date(`${before.maturityDate.slice(0, 10)}T12:00:00.000Z`)
+              : null,
+            taxExempt: Boolean(before.taxExempt),
           },
         });
         nextLabel = updated.ticker;
@@ -678,6 +700,7 @@ export async function revertAuditEvent(
             quantity: before.quantity,
             unitPrice: before.unitPrice,
             totalAmount: before.totalAmount,
+            fixedIncomeRate: before.fixedIncomeRate ?? null,
             notes: before.notes,
           },
         });

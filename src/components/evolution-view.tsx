@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   Calendar,
   Coins,
+  Landmark,
   Layers,
   Plus,
   RefreshCw,
@@ -46,6 +47,8 @@ import {
   aggregateEvolutionView,
   formatDateFullPTBR,
 } from "@/lib/domain/evolution";
+import type { FixedIncomeInitialData } from "@/lib/fixed-income-loader";
+import { FixedIncomeProjectionView } from "@/components/fixed-income-projection-view";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
 import { MASKED_COMPACT, maskBRL, maskSignedBRL } from "@/lib/privacy";
@@ -279,13 +282,20 @@ function ContributionTooltip({
 
 interface EvolutionViewProps {
   initialData: EvolutionData;
+  initialFixedIncome: FixedIncomeInitialData;
 }
 
-export function EvolutionView({ initialData }: EvolutionViewProps) {
+export function EvolutionView({
+  initialData,
+  initialFixedIncome,
+}: EvolutionViewProps) {
   const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
 
+  const [activeTab, setActiveTab] = useState<"HISTORICO" | "RENDA_FIXA">(
+    "HISTORICO"
+  );
   const [data, setData] = useState<EvolutionData>(initialData);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -409,17 +419,19 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            <RefreshCw
-              className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
-            />
-            {refreshing ? "Atualizando..." : "Atualizar dados"}
-          </button>
+          {activeTab === "HISTORICO" && (
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
+              />
+              {refreshing ? "Atualizando..." : "Atualizar dados"}
+            </button>
+          )}
 
           <Link
             href="/lancamentos?novo=1"
@@ -431,8 +443,39 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
         </div>
       </div>
 
-      {/* Empty State */}
-      {data.points.length === 0 ? (
+      {/* Main View Tabs */}
+      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900">
+        <button
+          type="button"
+          onClick={() => setActiveTab("HISTORICO")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            activeTab === "HISTORICO"
+              ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
+              : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
+        >
+          <TrendingUp className="h-3.5 w-3.5" />
+          Histórico
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("RENDA_FIXA")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+            activeTab === "RENDA_FIXA"
+              ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
+              : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )}
+        >
+          <Landmark className="h-3.5 w-3.5" />
+          Projeção Renda Fixa
+        </button>
+      </div>
+
+      {activeTab === "RENDA_FIXA" ? (
+        <FixedIncomeProjectionView initialData={initialFixedIncome} />
+      ) : data.points.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900">
           <TrendingUp className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
           <h2 className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">

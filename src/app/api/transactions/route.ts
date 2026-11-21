@@ -16,6 +16,7 @@ const createTransactionSchema = z.object({
   quantity: z.coerce.number().refine((v) => v !== 0, "Quantidade não pode ser zero"),
   unitPrice: z.coerce.number().min(0).optional(),
   totalAmount: z.coerce.number().optional(),
+  fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
   notes: z.string().max(300).nullable().optional(),
 });
 
@@ -38,6 +39,8 @@ export async function GET(request: Request) {
             assetClass: true,
             currency: true,
             sector: true,
+            fixedIncomeIndex: true,
+            fixedIncomeRate: true,
           },
         },
       },
@@ -53,8 +56,16 @@ export async function GET(request: Request) {
         quantity: Number(t.quantity),
         unitPrice: Number(t.unitPrice),
         totalAmount: Number(t.totalAmount),
+        fixedIncomeRate:
+          t.fixedIncomeRate !== null ? Number(t.fixedIncomeRate) : null,
         notes: t.notes,
-        asset: t.asset,
+        asset: {
+          ...t.asset,
+          fixedIncomeRate:
+            t.asset.fixedIncomeRate !== null
+              ? Number(t.asset.fixedIncomeRate)
+              : null,
+        },
       })),
     });
   } catch (err) {
@@ -89,6 +100,10 @@ export async function POST(request: Request) {
     }
 
     const isAdjustment = parsed.data.type === "BALANCE_ADJUSTMENT";
+    const isFixedIncomeBuy =
+      parsed.data.type === "BUY" &&
+      (asset.assetClass === "FIXED_INCOME" ||
+        asset.assetClass === "EMERGENCY_RESERVE");
     const quantity = isAdjustment
       ? parsed.data.quantity
       : Math.abs(parsed.data.quantity);
@@ -125,6 +140,9 @@ export async function POST(request: Request) {
           quantity,
           unitPrice: isAdjustment ? 1 : unitPrice,
           totalAmount,
+          fixedIncomeRate: isFixedIncomeBuy
+            ? (parsed.data.fixedIncomeRate ?? null)
+            : null,
           notes: parsed.data.notes ?? null,
         },
         include: {
@@ -135,6 +153,8 @@ export async function POST(request: Request) {
               assetClass: true,
               currency: true,
               sector: true,
+              fixedIncomeIndex: true,
+              fixedIncomeRate: true,
             },
           },
         },
@@ -164,8 +184,16 @@ export async function POST(request: Request) {
           quantity: Number(tx.quantity),
           unitPrice: Number(tx.unitPrice),
           totalAmount: Number(tx.totalAmount),
+          fixedIncomeRate:
+            tx.fixedIncomeRate !== null ? Number(tx.fixedIncomeRate) : null,
           notes: tx.notes,
-          asset: tx.asset,
+          asset: {
+            ...tx.asset,
+            fixedIncomeRate:
+              tx.asset.fixedIncomeRate !== null
+                ? Number(tx.asset.fixedIncomeRate)
+                : null,
+          },
         },
       },
       { status: 201 }

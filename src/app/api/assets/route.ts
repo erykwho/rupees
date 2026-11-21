@@ -8,8 +8,20 @@ import {
   toAssetSnapshot,
 } from "@/lib/audit-service";
 
+const fixedIncomeIndexSchema = z
+  .enum([
+    "CDI_PCT",
+    "CDI_PLUS",
+    "SELIC_PCT",
+    "SELIC_PLUS",
+    "IPCA_PLUS",
+    "PREFIXED",
+  ])
+  .nullable()
+  .optional();
+
 const createAssetSchema = z.object({
-  ticker: z.string().trim().min(1).max(20),
+  ticker: z.string().trim().min(1).max(30),
   assetClass: z.enum([
     "FIXED_INCOME",
     "BR_STOCK",
@@ -23,7 +35,19 @@ const createAssetSchema = z.object({
   priceMode: z.enum(["AUTO_YAHOO", "MANUAL"]).optional(),
   manualPrice: z.coerce.number().positive().nullable().optional(),
   isActive: z.boolean().optional(),
+  fixedIncomeIndex: fixedIncomeIndexSchema,
+  fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
+  maturityDate: z.string().trim().nullable().optional(),
+  taxExempt: z.boolean().optional(),
 });
+
+function parseOptionalMaturityDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const parsed = new Date(
+    raw.includes("T") ? raw : `${raw.slice(0, 10)}T12:00:00.000Z`
+  );
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 export async function GET() {
   try {
@@ -54,17 +78,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const { ticker, assetClass, sector, targetPctInClass, manualPrice, isActive } =
-      parsed.data;
+    const {
+      ticker,
+      assetClass,
+      sector,
+      targetPctInClass,
+      manualPrice,
+      isActive,
+      fixedIncomeIndex,
+      fixedIncomeRate,
+      maturityDate,
+      taxExempt,
+    } = parsed.data;
 
     const normalizedTicker = ticker.toUpperCase();
     const currency =
       assetClass === "US_STOCK" || assetClass === "US_REIT" ? "USD" : "BRL";
+    const isFixedIncome =
+      assetClass === "FIXED_INCOME" || assetClass === "EMERGENCY_RESERVE";
     const priceMode =
-      parsed.data.priceMode ??
-      (assetClass === "FIXED_INCOME" || assetClass === "EMERGENCY_RESERVE"
-        ? "MANUAL"
-        : "AUTO_YAHOO");
+      parsed.data.priceMode ?? (isFixedIncome ? "MANUAL" : "AUTO_YAHOO");
 
     await ensureAuditBackfill(user.id);
 
@@ -81,6 +114,12 @@ export async function POST(request: Request) {
           manualPrice:
             priceMode === "MANUAL" ? (manualPrice ?? 1) : (manualPrice ?? null),
           isActive: isActive ?? true,
+          fixedIncomeIndex: isFixedIncome ? (fixedIncomeIndex ?? null) : null,
+          fixedIncomeRate: isFixedIncome ? (fixedIncomeRate ?? null) : null,
+          maturityDate: isFixedIncome
+            ? parseOptionalMaturityDate(maturityDate)
+            : null,
+          taxExempt: isFixedIncome ? Boolean(taxExempt) : false,
         },
       });
 

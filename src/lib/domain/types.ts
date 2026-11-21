@@ -11,6 +11,35 @@ export type InvestmentClassKey = Exclude<AssetClassKey, "EMERGENCY_RESERVE">;
 export type CurrencyCode = "BRL" | "USD";
 export type PriceModeKey = "AUTO_YAHOO" | "MANUAL";
 export type TransactionTypeKey = "BUY" | "SELL" | "BALANCE_ADJUSTMENT";
+export type FixedIncomeIndexKey =
+  | "CDI_PCT"
+  | "CDI_PLUS"
+  | "SELIC_PCT"
+  | "SELIC_PLUS"
+  | "IPCA_PLUS"
+  | "PREFIXED";
+
+export const FIXED_INCOME_INDEXES: FixedIncomeIndexKey[] = [
+  "CDI_PCT",
+  "CDI_PLUS",
+  "SELIC_PCT",
+  "SELIC_PLUS",
+  "IPCA_PLUS",
+  "PREFIXED",
+];
+
+export const FIXED_INCOME_INDEX_LABELS: Record<FixedIncomeIndexKey, string> = {
+  CDI_PCT: "% do CDI",
+  CDI_PLUS: "CDI + taxa",
+  SELIC_PCT: "% da Selic",
+  SELIC_PLUS: "Selic + taxa",
+  IPCA_PLUS: "IPCA + taxa",
+  PREFIXED: "Prefixado",
+};
+
+export function isFixedIncomeClass(assetClass: AssetClassKey): boolean {
+  return assetClass === "FIXED_INCOME" || assetClass === "EMERGENCY_RESERVE";
+}
 
 export const INVESTMENT_CLASSES: InvestmentClassKey[] = [
   "FIXED_INCOME",
@@ -64,6 +93,10 @@ export interface AssetInput {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  fixedIncomeIndex?: FixedIncomeIndexKey | null;
+  fixedIncomeRate?: number | null;
+  maturityDate?: Date | string | null;
+  taxExempt?: boolean;
 }
 
 export interface TransactionInput {
@@ -74,6 +107,7 @@ export interface TransactionInput {
   quantity: number;
   unitPrice: number;
   totalAmount: number;
+  fixedIncomeRate?: number | null;
   notes?: string | null;
 }
 
@@ -92,6 +126,10 @@ export interface AssetSummary {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  fixedIncomeIndex: FixedIncomeIndexKey | null;
+  fixedIncomeRate: number | null;
+  maturityDate: string | null;
+  taxExempt: boolean;
   targetPctInClass: number;
   globalTargetPct: number;
   quantity: number;

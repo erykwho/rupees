@@ -194,6 +194,14 @@ export function computePortfolioSummary(params: {
       ? 0
       : targetValueBRL - item.currentValueBRL;
 
+    const maturityIso =
+      item.asset.maturityDate instanceof Date
+        ? item.asset.maturityDate.toISOString().slice(0, 10)
+        : typeof item.asset.maturityDate === "string" &&
+            item.asset.maturityDate.length > 0
+          ? item.asset.maturityDate.slice(0, 10)
+          : null;
+
     return {
       id: item.asset.id,
       ticker: item.asset.ticker,
@@ -203,6 +211,10 @@ export function computePortfolioSummary(params: {
       priceMode: item.asset.priceMode,
       manualPrice: item.asset.manualPrice,
       isActive: item.asset.isActive,
+      fixedIncomeIndex: item.asset.fixedIncomeIndex ?? null,
+      fixedIncomeRate: item.asset.fixedIncomeRate ?? null,
+      maturityDate: maturityIso,
+      taxExempt: Boolean(item.asset.taxExempt),
       targetPctInClass: item.asset.targetPctInClass,
       globalTargetPct: item.globalTargetPct,
       quantity: item.pos.quantity,

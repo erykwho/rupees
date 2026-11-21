@@ -16,6 +16,7 @@ const updateTransactionSchema = z.object({
   quantity: z.coerce.number().optional(),
   unitPrice: z.coerce.number().min(0).optional(),
   totalAmount: z.coerce.number().optional(),
+  fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
   notes: z.string().max(300).nullable().optional(),
 });
 
@@ -48,6 +49,8 @@ export async function PATCH(
             assetClass: true,
             currency: true,
             sector: true,
+            fixedIncomeIndex: true,
+            fixedIncomeRate: true,
           },
         },
       },
@@ -111,6 +114,10 @@ export async function PATCH(
           quantity: nextQty,
           unitPrice: isAdjustment ? 1 : nextUnit,
           totalAmount: nextTotal,
+          fixedIncomeRate:
+            parsed.data.fixedIncomeRate !== undefined
+              ? parsed.data.fixedIncomeRate
+              : existing.fixedIncomeRate,
           notes: parsed.data.notes !== undefined ? parsed.data.notes : existing.notes,
         },
         include: {
@@ -121,6 +128,8 @@ export async function PATCH(
               assetClass: true,
               currency: true,
               sector: true,
+              fixedIncomeIndex: true,
+              fixedIncomeRate: true,
             },
           },
         },
@@ -149,8 +158,18 @@ export async function PATCH(
         quantity: Number(updated.quantity),
         unitPrice: Number(updated.unitPrice),
         totalAmount: Number(updated.totalAmount),
+        fixedIncomeRate:
+          updated.fixedIncomeRate !== null
+            ? Number(updated.fixedIncomeRate)
+            : null,
         notes: updated.notes,
-        asset: updated.asset,
+        asset: {
+          ...updated.asset,
+          fixedIncomeRate:
+            updated.asset.fixedIncomeRate !== null
+              ? Number(updated.asset.fixedIncomeRate)
+              : null,
+        },
       },
     });
   } catch (err) {
