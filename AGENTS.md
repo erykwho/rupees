@@ -48,8 +48,8 @@ Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B
 
 - `pnpm test` — executa testes unitários (Vitest). Sempre adicionar/atualizar testes ao alterar `src/lib/domain/`.
 - `pnpm lint` — validação ESLint.
-- `pnpm build` — roda `prisma generate && next build` (validar antes de abrir PR).
-- `pnpm db:push` — aplica alterações do schema Prisma no PostgreSQL.
+- `pnpm build` — roda `prisma generate && node scripts/vercel-db-sync.mjs && next build` (validar antes de abrir PR; sincroniza o schema automaticamente no deploy de produção da Vercel quando `VERCEL_ENV=production`).
+- `pnpm db:push` — aplica alterações do schema Prisma manualmente no PostgreSQL.
 - Idioma da interface e comunicação com o usuário: **Português (pt-BR)**.
 - **Roadmap V2 planejado:** Relatório anual de Imposto de Renda (aba `Informe` da planilha), controle de dividendos/proventos e gráfico histórico de evolução patrimonial.
 
