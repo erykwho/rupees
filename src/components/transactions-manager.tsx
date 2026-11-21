@@ -17,8 +17,9 @@ import {
   type CurrencyCode,
   type TransactionTypeKey,
   formatCurrency,
-  formatQty,
 } from "@/lib/domain/types";
+import { usePrivacy } from "@/components/privacy-provider";
+import { maskCurrency, maskQty } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 export interface TransactionRow {
@@ -68,6 +69,7 @@ export function TransactionsManager({
   assets,
   openNewByDefault = false,
 }: TransactionsManagerProps) {
+  const { isPrivate } = usePrivacy();
   const [transactions, setTransactions] =
     useState<TransactionRow[]>(initialTransactions);
   const [query, setQuery] = useState("");
@@ -354,13 +356,17 @@ export function TransactionsManager({
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono text-slate-700 tabular-nums dark:text-slate-300">
-                      {formatQty(tx.quantity, tx.asset.assetClass)}
+                      {maskQty(tx.quantity, isPrivate, tx.asset.assetClass)}
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
                       {formatCurrency(tx.unitPrice, tx.asset.currency)}
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {formatCurrency(tx.totalAmount, tx.asset.currency)}
+                      {maskCurrency(
+                        tx.totalAmount,
+                        tx.asset.currency,
+                        isPrivate
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-1">

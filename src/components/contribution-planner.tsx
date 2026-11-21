@@ -10,9 +10,9 @@ import {
   type InvestmentClassKey,
   type PortfolioSummary,
   formatBRL,
-  formatUSD,
-  formatQty,
 } from "@/lib/domain/types";
+import { usePrivacy } from "@/components/privacy-provider";
+import { maskBRL, maskQty, maskUSD } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 interface ContributionPlannerProps {
@@ -22,6 +22,7 @@ interface ContributionPlannerProps {
 export function ContributionPlanner({
   initialSummary,
 }: ContributionPlannerProps) {
+  const { isPrivate } = usePrivacy();
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [amountInput, setAmountInput] = useState("1000");
   const [maxAssets, setMaxAssets] = useState(3);
@@ -170,7 +171,7 @@ export function ContributionPlanner({
             Total Alocado
           </p>
           <p className="mt-1 font-mono text-xl font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
-            {formatBRL(plan.totalAllocatedBRL)}
+            {maskBRL(plan.totalAllocatedBRL, isPrivate)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
@@ -178,7 +179,7 @@ export function ContributionPlanner({
             Sobra não alocada
           </p>
           <p className="mt-1 font-mono text-xl font-bold text-slate-700 tabular-nums dark:text-slate-200">
-            {formatBRL(plan.remainingBRL)}
+            {maskBRL(plan.remainingBRL, isPrivate)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
@@ -227,7 +228,7 @@ export function ContributionPlanner({
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       Falta para meta:{" "}
                       <span className="font-mono font-semibold text-slate-700 tabular-nums dark:text-slate-200">
-                        {formatBRL(s.neededBRL)}
+                        {maskBRL(s.neededBRL, isPrivate)}
                       </span>{" "}
                       · Cotação:{" "}
                       <span className="font-mono tabular-nums">
@@ -239,14 +240,14 @@ export function ContributionPlanner({
                   <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
                     <div className="text-left sm:text-right">
                       <p className="font-mono text-base font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
-                        {formatBRL(s.investBRL)}
+                        {maskBRL(s.investBRL, isPrivate)}
                       </p>
                       <p className="font-mono text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                        {formatQty(s.suggestedQty, s.assetClass)}{" "}
+                        {maskQty(s.suggestedQty, isPrivate, s.assetClass)}{" "}
                         {s.assetClass === "FIXED_INCOME" ? "reais" : "unid."}
                         {s.currency === "USD" && (
                           <span className="ml-1.5 text-slate-400 dark:text-slate-500">
-                            ({formatUSD(s.investUSD)})
+                            ({maskUSD(s.investUSD, isPrivate)})
                           </span>
                         )}
                       </p>

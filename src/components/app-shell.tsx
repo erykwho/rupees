@@ -17,6 +17,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
+import { PrivacyToggle } from "@/components/privacy-toggle";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { RupeesLogo } from "@/components/rupees-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -302,13 +303,13 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         <div
           className={cn(
             "flex h-16 items-center",
-            desktopCollapsed ? "justify-center px-3" : "justify-between gap-2 px-5"
+            desktopCollapsed ? "justify-center px-3" : "justify-between gap-2 px-4"
           )}
         >
           <Link
             href="/"
             title="Rupees — Visão Geral"
-            className="flex min-w-0 items-center gap-3"
+            className="flex min-w-0 items-center gap-2.5"
           >
             <BrandLogo />
             {!desktopCollapsed && (
@@ -322,7 +323,12 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
               </div>
             )}
           </Link>
-          {!desktopCollapsed && <ThemeToggle />}
+          {!desktopCollapsed && (
+            <div className="flex shrink-0 items-center gap-0.5">
+              <PrivacyToggle />
+              <ThemeToggle />
+            </div>
+          )}
         </div>
 
         <nav
@@ -340,6 +346,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         >
           {desktopCollapsed ? (
             <div className="flex flex-col items-center gap-2">
+              <PrivacyToggle />
               <ThemeToggle />
               {userAvatar}
               {signOutButton}
@@ -452,6 +459,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         </div>
 
         <div className="flex items-center gap-1">
+          <PrivacyToggle />
           <ThemeToggle />
         </div>
       </header>

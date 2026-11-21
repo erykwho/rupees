@@ -21,8 +21,9 @@ import {
   formatBRL,
   formatCurrency,
   formatPct,
-  formatQty,
 } from "@/lib/domain/types";
+import { usePrivacy } from "@/components/privacy-provider";
+import { maskBRL, maskQty } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 interface PortfolioManagerProps {
@@ -51,6 +52,7 @@ const EMPTY_FORM: AssetFormState = {
 };
 
 export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
+  const { isPrivate } = usePrivacy();
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [selectedClass, setSelectedClass] = useState<AssetClassKey | "ALL">(
     "ALL"
@@ -390,7 +392,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                       </td>
 
                       <td className="px-4 py-3.5 text-right font-mono text-slate-700 tabular-nums dark:text-slate-300">
-                        {formatQty(a.quantity, a.assetClass)}
+                        {maskQty(a.quantity, isPrivate, a.assetClass)}
                       </td>
 
                       <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
@@ -412,7 +414,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
                       <td className="px-4 py-3.5 text-right font-mono tabular-nums">
                         <div className="font-semibold text-slate-900 dark:text-slate-100">
-                          {formatBRL(a.currentValueBRL)}
+                          {maskBRL(a.currentValueBRL, isPrivate)}
                         </div>
                         {a.quantity > 0 && !isFixedOrReserve && (
                           <div
@@ -684,7 +686,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
               Saldo atual registrado:{" "}
               <strong className="font-mono text-slate-800 dark:text-slate-200">
-                {formatBRL(balanceModalAsset.currentValueBRL)}
+                {maskBRL(balanceModalAsset.currentValueBRL, isPrivate)}
               </strong>
               . Informe o valor atual na corretora para registrar o rendimento.
             </p>

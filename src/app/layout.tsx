@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { PrivacyProvider } from "@/components/privacy-provider";
 import {
   THEME_STORAGE_KEY,
   ThemeProvider,
@@ -65,7 +66,9 @@ export default function RootLayout({
       <body
         className={`${plusJakarta.variable} ${jetbrainsMono.variable} min-h-screen bg-[#f6f7f9] text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <PrivacyProvider>{children}</PrivacyProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

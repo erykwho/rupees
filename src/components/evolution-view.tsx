@@ -46,7 +46,9 @@ import {
   aggregateEvolutionView,
   formatDateFullPTBR,
 } from "@/lib/domain/evolution";
+import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
+import { MASKED_COMPACT, maskBRL, maskSignedBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 const RANGE_OPTIONS: Array<{ value: EvolutionRange; label: string }> = [
@@ -88,6 +90,7 @@ interface EvolutionTooltipProps {
   splitByClass?: boolean;
   activeClasses?: AssetClassKey[];
   chartMode?: EvolutionChartMode;
+  isPrivate?: boolean;
 }
 
 function EvolutionTooltip({
@@ -96,6 +99,7 @@ function EvolutionTooltip({
   splitByClass = false,
   activeClasses = [],
   chartMode = "PATRIMONIO",
+  isPrivate = false,
 }: EvolutionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const pt = payload[0]?.payload;
@@ -144,8 +148,8 @@ function EvolutionTooltip({
                     {chartMode === "RENTABILIDADE"
                       ? `${isPos ? "+" : ""}${formatPct(value, 1)}`
                       : chartMode === "GANHO"
-                        ? `${isPos ? "+" : ""}${formatBRL(value)}`
-                        : formatBRL(value)}
+                        ? maskSignedBRL(value, isPrivate)
+                        : maskBRL(value, isPrivate)}
                   </span>
                 </div>
               );
@@ -159,7 +163,7 @@ function EvolutionTooltip({
             {splitByClass ? "Total Patrimônio" : "Patrimônio"}
           </span>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
-            {formatBRL(pt.marketValueBRL)}
+            {maskBRL(pt.marketValueBRL, isPrivate)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -168,7 +172,7 @@ function EvolutionTooltip({
             {splitByClass ? "Total Aportado" : "Aportado"}
           </span>
           <span className="font-medium text-slate-700 dark:text-slate-300">
-            {formatBRL(pt.investedCostBRL)}
+            {maskBRL(pt.investedCostBRL, isPrivate)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-1.5 dark:border-slate-800">
@@ -181,8 +185,7 @@ function EvolutionTooltip({
                 : "text-rose-600 dark:text-rose-400"
             )}
           >
-            {isPositive ? "+" : ""}
-            {formatBRL(pt.profitLossBRL)} ({isPositive ? "+" : ""}
+            {maskSignedBRL(pt.profitLossBRL, isPrivate)} ({isPositive ? "+" : ""}
             {formatPct(pt.profitLossPct, 1)})
           </span>
         </div>
@@ -199,12 +202,14 @@ interface ContributionTooltipProps {
   active?: boolean;
   payload?: Array<{ payload?: AggregatedContributionPoint }>;
   activeClasses: AssetClassKey[];
+  isPrivate?: boolean;
 }
 
 function ContributionTooltip({
   active,
   payload,
   activeClasses,
+  isPrivate = false,
 }: ContributionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
@@ -247,8 +252,7 @@ function ContributionTooltip({
                       : "text-rose-600 dark:text-rose-400"
                   )}
                 >
-                  {val >= 0 ? "+" : ""}
-                  {formatBRL(val)}
+                  {maskSignedBRL(val, isPrivate)}
                 </span>
               </div>
             );
@@ -265,8 +269,7 @@ function ContributionTooltip({
                 : "text-rose-600 dark:text-rose-400"
             )}
           >
-            {row.totalBRL >= 0 ? "+" : ""}
-            {formatBRL(row.totalBRL)}
+            {maskSignedBRL(row.totalBRL, isPrivate)}
           </span>
         </div>
       </div>
@@ -280,6 +283,7 @@ interface EvolutionViewProps {
 
 export function EvolutionView({ initialData }: EvolutionViewProps) {
   const { theme } = useTheme();
+  const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
 
   const [data, setData] = useState<EvolutionData>(initialData);
@@ -574,7 +578,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-                {formatBRL(kpis.currentMarketValueBRL)}
+                {maskBRL(kpis.currentMarketValueBRL, isPrivate)}
               </p>
               <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
                 {selectionDescription}
@@ -590,16 +594,17 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 <Coins className="h-4 w-4 text-sky-600 dark:text-sky-400" />
               </div>
               <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-                {formatBRL(
+                {maskBRL(
                   kpis.isSubPeriod
                     ? kpis.periodContributionBRL
-                    : kpis.totalInvestedCostBRL
+                    : kpis.totalInvestedCostBRL,
+                  isPrivate
                 )}
               </p>
               <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
                 {kpis.isSubPeriod
-                  ? `Custo acumulado: ${formatBRL(kpis.totalInvestedCostBRL)}`
-                  : `Aporte líquido: ${formatBRL(kpis.periodContributionBRL)}`}
+                  ? `Custo acumulado: ${maskBRL(kpis.totalInvestedCostBRL, isPrivate)}`
+                  : `Aporte líquido: ${maskBRL(kpis.periodContributionBRL, isPrivate)}`}
               </p>
             </div>
 
@@ -625,14 +630,11 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                     : "text-rose-600 dark:text-rose-400"
                 )}
               >
-                {isGainPositive ? "+" : ""}
-                {formatBRL(gainValue)}
+                {maskSignedBRL(gainValue, isPrivate)}
               </p>
               <p className="mt-1 text-xs text-slate-500 tabular-nums dark:text-slate-400">
                 {kpis.isSubPeriod
-                  ? `Acumulado total: ${
-                      kpis.totalProfitLossBRL >= 0 ? "+" : ""
-                    }${formatBRL(kpis.totalProfitLossBRL)}`
+                  ? `Acumulado total: ${maskSignedBRL(kpis.totalProfitLossBRL, isPrivate)}`
                   : "Patrimônio menos custo aportado"}
               </p>
             </div>
@@ -822,7 +824,9 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                         tickFormatter={(val: number) =>
                           chartMode === "RENTABILIDADE"
                             ? `${val.toFixed(0)}%`
-                            : formatCompactBRL(val)
+                            : isPrivate
+                              ? MASKED_COMPACT
+                              : formatCompactBRL(val)
                         }
                       />
                       <Tooltip
@@ -831,6 +835,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                             splitByClass={splitByClass && activeClasses.length > 1}
                             activeClasses={activeClasses}
                             chartMode={chartMode}
+                            isPrivate={isPrivate}
                           />
                         }
                       />
@@ -1074,12 +1079,17 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                         tickLine={false}
                         axisLine={false}
                         width={68}
-                        tickFormatter={(val: number) => formatCompactBRL(val)}
+                        tickFormatter={(val: number) =>
+                          isPrivate ? MASKED_COMPACT : formatCompactBRL(val)
+                        }
                       />
                       <ReferenceLine y={0} stroke={refLineStroke} />
                       <Tooltip
                         content={
-                          <ContributionTooltip activeClasses={activeClasses} />
+                          <ContributionTooltip
+                            activeClasses={activeClasses}
+                            isPrivate={isPrivate}
+                          />
                         }
                       />
                       {activeClasses.map((cls) => (
