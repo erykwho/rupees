@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   ensureAuditBackfill,
@@ -66,9 +66,8 @@ export async function GET() {
     });
     return NextResponse.json({ assets });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json({ error: "Erro ao listar ativos" }, { status: 500 });
   }
 }
@@ -208,9 +207,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ asset }, { status: 201 });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     if (
       typeof err === "object" &&
       err !== null &&

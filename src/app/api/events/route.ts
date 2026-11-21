@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { listAuditEvents } from "@/lib/audit-service";
 import type { AuditActionKey, AuditEntityTypeKey } from "@/lib/domain/audit";
 
@@ -50,9 +50,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("GET /api/events error:", err);
     return NextResponse.json(
       { error: "Erro ao carregar eventos" },

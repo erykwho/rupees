@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { loadUserPortfolio } from "@/lib/portfolio-loader";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import type { InvestmentClassKey } from "@/lib/domain/types";
@@ -42,9 +42,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ plan });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("POST /api/contribution-plan error:", err);
     return NextResponse.json(
       { error: "Erro ao calcular plano de aporte" },

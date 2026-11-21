@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { searchTickersForClass } from "@/lib/ticker-validator";
 import type { AssetClassKey } from "@/lib/domain/types";
 
@@ -36,9 +36,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(response);
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("GET /api/tickers/search error:", err);
     return NextResponse.json({ results: [], unavailable: true });
   }

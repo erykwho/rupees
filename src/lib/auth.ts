@@ -1,5 +1,7 @@
 import NextAuth from "next-auth";
+import { NextResponse } from "next/server";
 import { authConfig, isEmailAllowed } from "@/auth.config";
+import { hasValidUnlockCookie } from "@/lib/app-lock";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -35,15 +37,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user?.email) {
         const dbUser = await prisma.user.findUnique({
           where: { email: user.email.toLowerCase() },
-          select: { id: true },
+          select: { id: true, appLockEnabled: true },
         });
         if (dbUser) {
           token.userId = dbUser.id;
+          token.appLockEnabled = dbUser.appLockEnabled;
         }
+      } else if (
+        trigger === "update" &&
+        session &&
+        typeof (session as { appLockEnabled?: unknown }).appLockEnabled ===
+          "boolean"
+      ) {
+        token.appLockEnabled = (
+          session as { appLockEnabled: boolean }
+        ).appLockEnabled;
       }
       return token;
     },
@@ -51,12 +63,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && typeof token.userId === "string") {
         session.user.id = token.userId;
       }
+      if (session.user && typeof token.appLockEnabled === "boolean") {
+        session.user.appLockEnabled = token.appLockEnabled;
+      }
       return session;
     },
   },
 });
 
-export async function requireUser() {
+async function resolveAuthenticatedUser() {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) {
@@ -79,4 +94,43 @@ export async function requireUser() {
   }
 
   return dbUser;
+}
+
+/**
+ * Requires an authenticated Google session AND, if App Lock is enabled,
+ * a valid server-signed unlock cookie.
+ */
+export async function requireUser() {
+  const dbUser = await resolveAuthenticatedUser();
+
+  if (dbUser.appLockEnabled) {
+    const unlocked = await hasValidUnlockCookie(dbUser.id);
+    if (!unlocked) {
+      throw new Error("APP_LOCKED");
+    }
+  }
+
+  return dbUser;
+}
+
+/**
+ * Requires an authenticated Google session, allowing locked state.
+ * Use ONLY in unlock/status security endpoints.
+ */
+export async function requireAuthenticatedUserAllowLocked() {
+  return resolveAuthenticatedUser();
+}
+
+export function authErrorResponse(err: unknown): NextResponse | null {
+  if (!(err instanceof Error)) return null;
+  if (err.message === "UNAUTHORIZED") {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+  if (err.message === "APP_LOCKED") {
+    return NextResponse.json(
+      { error: "Aplicativo bloqueado. Desbloqueie para continuar.", code: "APP_LOCKED" },
+      { status: 423 }
+    );
+  }
+  return null;
 }

@@ -62,17 +62,25 @@ enum TickerValidationStatus {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
-  name         String?
-  image        String?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  goal         AllocationGoal?
-  sectorGoals  SectorGoal[]
-  assets       Asset[]
-  transactions Transaction[]
-  auditEvents  AuditEvent[]
+  id                    String               @id @default(cuid())
+  email                 String               @unique
+  name                  String?
+  image                 String?
+  appLockEnabled        Boolean              @default(false)
+  appLockPinHash        String?
+  appLockTimeoutMinutes Int                  @default(30)
+  appLockRequirePinOnly Boolean              @default(false)
+  appLockFailedAttempts Int                  @default(0)
+  appLockLockedUntil    DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  goal                  AllocationGoal?
+  sectorGoals           SectorGoal[]
+  assets                Asset[]
+  transactions          Transaction[]
+  auditEvents           AuditEvent[]
+  webAuthnCredentials   WebAuthnCredential[]
+  securityChallenges    SecurityChallenge[]
 }
 
 model AllocationGoal {
@@ -191,4 +199,31 @@ model AuditEvent {
 
   @@index([userId, createdAt])
   @@index([userId, entityType, entityId, createdAt])
+}
+
+model WebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique
+  publicKey    String
+  counter      Int       @default(0)
+  transports   String?
+  deviceName   String
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model SecurityChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge String
+  type      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
 }

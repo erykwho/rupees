@@ -14,6 +14,7 @@ import {
   Menu,
   PieChart,
   RefreshCw,
+  Shield,
   Target,
   TrendingUp,
   X,
@@ -47,10 +48,14 @@ const NAV_ITEMS = [
   },
   { href: "/objetivos", label: "Objetivos", fullLabel: "Objetivos", icon: Target },
   { href: "/eventos", label: "Eventos", fullLabel: "Eventos", icon: History },
+  { href: "/seguranca", label: "Segurança", fullLabel: "Segurança", icon: Shield },
 ];
 
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(
-  (item) => item.href !== "/objetivos" && item.href !== "/eventos"
+  (item) =>
+    item.href !== "/objetivos" &&
+    item.href !== "/eventos" &&
+    item.href !== "/seguranca"
 );
 const SIDEBAR_STORAGE_KEY = "rupees-sidebar-collapsed";
 const sidebarListeners = new Set<() => void>();
@@ -92,6 +97,7 @@ interface AppShellProps {
     email?: string | null;
     image?: string | null;
   };
+  appLockEnabled?: boolean;
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
 }
@@ -112,7 +118,12 @@ function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
   );
 }
 
-export function AppShell({ user, signOutAction, children }: AppShellProps) {
+export function AppShell({
+  user,
+  appLockEnabled = false,
+  signOutAction,
+  children,
+}: AppShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const desktopCollapsed = useSyncExternalStore(
@@ -121,6 +132,42 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
     getServerSidebarCollapsed
   );
   const drawerTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!appLockEnabled) return;
+
+    let checking = false;
+
+    async function checkLockOnResume() {
+      if (document.visibilityState !== "visible" || checking) return;
+      checking = true;
+      try {
+        const res = await fetch("/api/security/status", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          enabled?: boolean;
+          unlocked?: boolean;
+        };
+        if (data.enabled && !data.unlocked) {
+          const target = `${window.location.pathname}${window.location.search}`;
+          const nextParam =
+            target && target !== "/"
+              ? `?next=${encodeURIComponent(target)}`
+              : "";
+          window.location.replace(`/unlock${nextParam}`);
+        }
+      } catch {
+        // Ignora falhas transitórias de rede ao retomar do background
+      } finally {
+        checking = false;
+      }
+    }
+
+    document.addEventListener("visibilitychange", checkLockOnResume);
+    return () => {
+      document.removeEventListener("visibilitychange", checkLockOnResume);
+    };
+  }, [appLockEnabled]);
 
   function toggleDesktopSidebar() {
     const next = !desktopCollapsed;

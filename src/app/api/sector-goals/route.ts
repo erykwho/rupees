@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSectorGoalsBackfill } from "@/lib/sector-goals";
 import {
@@ -44,9 +44,8 @@ export async function GET() {
 
     return NextResponse.json({ sectorGoals });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("GET /api/sector-goals error:", err);
     return NextResponse.json(
       { error: "Erro ao carregar objetivos por setor" },
@@ -112,9 +111,8 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     if (
       typeof err === "object" &&
       err !== null &&

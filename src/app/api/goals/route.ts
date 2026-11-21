@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   ensureAuditBackfill,
@@ -46,9 +46,8 @@ export async function GET() {
     });
     return NextResponse.json({ goal });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json(
       { error: "Erro ao carregar objetivos" },
       { status: 500 }
@@ -100,9 +99,8 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ goal });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json(
       { error: "Erro ao salvar objetivos" },
       { status: 500 }

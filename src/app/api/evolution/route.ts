@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { loadUserEvolution } from "@/lib/evolution-loader";
 
 export async function GET(request: Request) {
@@ -11,9 +11,8 @@ export async function GET(request: Request) {
     const data = await loadUserEvolution(user.id, { forceRefresh });
     return NextResponse.json(data);
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("GET /api/evolution error:", err);
     return NextResponse.json(
       { error: "Erro ao carregar evolução patrimonial" },

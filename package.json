@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.1.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.76.0",
     "next": "16.4.6",
