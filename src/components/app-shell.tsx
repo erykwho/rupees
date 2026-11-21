@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  History,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -45,9 +46,12 @@ const NAV_ITEMS = [
     icon: Compass,
   },
   { href: "/objetivos", label: "Objetivos", fullLabel: "Objetivos", icon: Target },
+  { href: "/eventos", label: "Eventos", fullLabel: "Eventos", icon: History },
 ];
 
-const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.href !== "/objetivos");
+const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(
+  (item) => item.href !== "/objetivos" && item.href !== "/eventos"
+);
 const SIDEBAR_STORAGE_KEY = "rupees-sidebar-collapsed";
 const sidebarListeners = new Set<() => void>();
 

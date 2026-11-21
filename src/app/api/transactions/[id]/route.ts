@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  buildTransactionEntityLabel,
+  ensureAuditBackfill,
+  recordAuditEvent,
+  toTransactionSnapshot,
+} from "@/lib/audit-service";
 
 const updateTransactionSchema = z.object({
   assetId: z.string().min(1).optional(),
@@ -30,8 +36,21 @@ export async function PATCH(
       );
     }
 
+    await ensureAuditBackfill(user.id);
+
     const existing = await prisma.transaction.findFirst({
       where: { id, userId: user.id },
+      include: {
+        asset: {
+          select: {
+            id: true,
+            ticker: true,
+            assetClass: true,
+            currency: true,
+            sector: true,
+          },
+        },
+      },
     });
     if (!existing) {
       return NextResponse.json(
@@ -82,28 +101,43 @@ export async function PATCH(
         )
       : existing.date;
 
-    const updated = await prisma.transaction.update({
-      where: { id: existing.id },
-      data: {
-        assetId: parsed.data.assetId ?? existing.assetId,
-        date: nextDate,
-        type: nextType,
-        quantity: nextQty,
-        unitPrice: isAdjustment ? 1 : nextUnit,
-        totalAmount: nextTotal,
-        notes: parsed.data.notes !== undefined ? parsed.data.notes : existing.notes,
-      },
-      include: {
-        asset: {
-          select: {
-            id: true,
-            ticker: true,
-            assetClass: true,
-            currency: true,
-            sector: true,
+    const updated = await prisma.$transaction(async (db) => {
+      const result = await db.transaction.update({
+        where: { id: existing.id },
+        data: {
+          assetId: parsed.data.assetId ?? existing.assetId,
+          date: nextDate,
+          type: nextType,
+          quantity: nextQty,
+          unitPrice: isAdjustment ? 1 : nextUnit,
+          totalAmount: nextTotal,
+          notes: parsed.data.notes !== undefined ? parsed.data.notes : existing.notes,
+        },
+        include: {
+          asset: {
+            select: {
+              id: true,
+              ticker: true,
+              assetClass: true,
+              currency: true,
+              sector: true,
+            },
           },
         },
-      },
+      });
+
+      const afterSnap = toTransactionSnapshot(result);
+      await recordAuditEvent(db, {
+        userId: user.id,
+        entityType: "TRANSACTION",
+        entityId: result.id,
+        entityLabel: buildTransactionEntityLabel(afterSnap),
+        action: "UPDATE",
+        beforeState: toTransactionSnapshot(existing),
+        afterState: afterSnap,
+      });
+
+      return result;
     });
 
     return NextResponse.json({
@@ -138,8 +172,20 @@ export async function DELETE(
     const user = await requireUser();
     const { id } = await context.params;
 
+    await ensureAuditBackfill(user.id);
+
     const existing = await prisma.transaction.findFirst({
       where: { id, userId: user.id },
+      include: {
+        asset: {
+          select: {
+            id: true,
+            ticker: true,
+            assetClass: true,
+            currency: true,
+          },
+        },
+      },
     });
     if (!existing) {
       return NextResponse.json(
@@ -148,7 +194,21 @@ export async function DELETE(
       );
     }
 
-    await prisma.transaction.delete({ where: { id: existing.id } });
+    await prisma.$transaction(async (db) => {
+      await db.transaction.delete({ where: { id: existing.id } });
+
+      const beforeSnap = toTransactionSnapshot(existing);
+      await recordAuditEvent(db, {
+        userId: user.id,
+        entityType: "TRANSACTION",
+        entityId: existing.id,
+        entityLabel: buildTransactionEntityLabel(beforeSnap),
+        action: "DELETE",
+        beforeState: beforeSnap,
+        afterState: null,
+      });
+    });
+
     return NextResponse.json({ deleted: true });
   } catch (err) {
     if (err instanceof Error && err.message === "UNAUTHORIZED") {
