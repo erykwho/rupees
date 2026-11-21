@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -7,10 +8,14 @@ import {
   Compass,
   LayoutDashboard,
   LogOut,
+  Menu,
   PieChart,
+  RefreshCw,
   Target,
   TrendingUp,
+  X,
 } from "lucide-react";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -50,8 +55,157 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
+function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
+  const boxClass = size === "sm" ? "h-8 w-8 rounded-lg" : "h-9 w-9 rounded-xl";
+  const svgClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center bg-emerald-600 shadow-sm shadow-emerald-600/20",
+        boxClass
+      )}
+    >
+      <svg viewBox="0 0 32 32" className={svgClass} fill="none">
+        <path
+          d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
+          fill="#A7F3D0"
+        />
+        <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
+        <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#059669" />
+      </svg>
+    </div>
+  );
+}
+
 export function AppShell({ user, signOutAction, children }: AppShellProps) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const drawerTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    }
+
+    function handlePopState() {
+      setMobileMenuOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [mobileMenuOpen]);
+
+  function handleDrawerTouchStart(event: React.TouchEvent<HTMLElement>) {
+    if (event.touches.length !== 1) {
+      drawerTouchStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    drawerTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleDrawerTouchEnd(event: React.TouchEvent<HTMLElement>) {
+    const start = drawerTouchStartRef.current;
+    drawerTouchStartRef.current = null;
+    if (!start || event.changedTouches.length === 0) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+
+    if (deltaX < -56 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      setMobileMenuOpen(false);
+    }
+  }
+
+  function handleManualReload() {
+    setMobileMenuOpen(false);
+    window.location.reload();
+  }
+
+  const renderNavLinks = (onNavigate?: () => void) =>
+    NAV_ITEMS.map((item) => {
+      const Icon = item.icon;
+      const active =
+        item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          onClick={onNavigate}
+          className={cn(
+            "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors",
+            active
+              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+          )}
+        >
+          <Icon
+            className={cn(
+              "h-[18px] w-[18px]",
+              active
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-slate-400 dark:text-slate-500"
+            )}
+          />
+          {item.fullLabel}
+        </Link>
+      );
+    });
+
+  const userFooter = (
+    <div className="flex items-center gap-3">
+      {user.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.image}
+          alt={user.name ?? "Usuário"}
+          className="h-9 w-9 rounded-full border border-slate-200 object-cover dark:border-slate-700"
+        />
+      ) : (
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+          {(user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+          {user.name ?? "Investidor"}
+        </p>
+        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+          {user.email}
+        </p>
+      </div>
+      <form action={signOutAction}>
+        <button
+          type="submit"
+          title="Sair"
+          aria-label="Sair"
+          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </form>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-slate-900 dark:bg-slate-950 dark:text-slate-100 lg:flex">
@@ -59,16 +213,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-slate-200/80 lg:bg-white dark:lg:border-slate-800 dark:lg:bg-slate-900">
         <div className="flex h-16 items-center justify-between gap-2 px-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-sm shadow-emerald-600/20">
-              <svg viewBox="0 0 32 32" className="h-5 w-5" fill="none">
-                <path
-                  d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
-                  fill="#A7F3D0"
-                />
-                <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
-                <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#059669" />
-              </svg>
-            </div>
+            <BrandLogo />
             <div>
               <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
                 Rupees
@@ -81,130 +226,131 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
           <ThemeToggle />
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4" aria-label="Navegação principal">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                )}
-              >
-                <Icon
-                  className={cn(
-                    "h-[18px] w-[18px]",
-                    active
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-slate-400 dark:text-slate-500"
-                  )}
-                />
-                {item.fullLabel}
-              </Link>
-            );
-          })}
+        <nav
+          className="flex-1 space-y-1 px-3 py-4"
+          aria-label="Navegação principal"
+        >
+          {renderNavLinks()}
         </nav>
 
         <div className="border-t border-slate-200/80 p-4 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            {user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={user.image}
-                alt={user.name ?? "Usuário"}
-                className="h-9 w-9 rounded-full border border-slate-200 object-cover dark:border-slate-700"
-              />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                {(user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {user.name ?? "Investidor"}
-              </p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                {user.email}
-              </p>
-            </div>
-            <form action={signOutAction}>
-              <button
-                type="submit"
-                title="Sair"
-                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </form>
-          </div>
+          {userFooter}
         </div>
       </aside>
 
-      {/* Mobile Top Header */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 lg:hidden">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 shadow-sm">
-            <svg viewBox="0 0 32 32" className="h-4 w-4" fill="none">
-              <path
-                d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
-                fill="#A7F3D0"
-              />
-              <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
-            </svg>
+      {/* Mobile Sidebar Drawer */}
+      <div
+        aria-hidden={!mobileMenuOpen}
+        className={cn(
+          "fixed inset-0 z-40 lg:hidden",
+          mobileMenuOpen ? "pointer-events-auto" : "pointer-events-none"
+        )}
+      >
+        {/* Backdrop */}
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className={cn(
+            "fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200 dark:bg-slate-950/70",
+            mobileMenuOpen ? "opacity-100" : "opacity-0"
+          )}
+        />
+
+        {/* Drawer Panel */}
+        <aside
+          role="dialog"
+          aria-modal={mobileMenuOpen}
+          aria-label="Menu de navegação"
+          onTouchStart={handleDrawerTouchStart}
+          onTouchEnd={handleDrawerTouchEnd}
+          className={cn(
+            "fixed inset-y-0 left-0 flex w-72 max-w-[82vw] flex-col border-r border-slate-200/80 bg-white shadow-2xl transition-transform duration-200 ease-out dark:border-slate-800 dark:bg-slate-900",
+            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-200/80 px-4 dark:border-slate-800">
+            <Link
+              href="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3"
+            >
+              <BrandLogo />
+              <div>
+                <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  Rupees
+                </span>
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Controle de Investimentos
+                </p>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Fechar menu"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Rupees
-          </span>
-        </Link>
+
+          <nav
+            className="flex-1 space-y-1 overflow-y-auto px-3 py-4"
+            aria-label="Menu lateral mobile"
+          >
+            {renderNavLinks(() => setMobileMenuOpen(false))}
+          </nav>
+
+          <div className="px-3 pb-3">
+            <button
+              type="button"
+              onClick={handleManualReload}
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            >
+              <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Atualizar aplicativo
+            </button>
+          </div>
+
+          <div className="pb-safe border-t border-slate-200/80 px-4 pt-4 dark:border-slate-800">
+            {userFooter}
+          </div>
+        </aside>
+      </div>
+
+      {/* Mobile Top Header */}
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/90 px-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90 lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menu de navegação"
+            aria-expanded={mobileMenuOpen}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          <Link href="/" className="flex items-center gap-2">
+            <BrandLogo size="sm" />
+            <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              Rupees
+            </span>
+          </Link>
+        </div>
 
         <div className="flex items-center gap-1">
-          <Link
-            href="/objetivos"
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-              pathname.startsWith("/objetivos")
-                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-            )}
-          >
-            <Target
-              className={cn(
-                "h-3.5 w-3.5",
-                pathname.startsWith("/objetivos")
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-400 dark:text-slate-500"
-              )}
-            />
-            Objetivos
-          </Link>
-
           <ThemeToggle />
-
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sair
-            </button>
-          </form>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 pb-24 lg:pb-10 lg:pl-64">
-        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-          {children}
-        </div>
+        <PullToRefresh disabled={mobileMenuOpen}>
+          <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+            {children}
+          </div>
+        </PullToRefresh>
       </main>
 
       {/* Mobile Bottom Tab Bar */}
