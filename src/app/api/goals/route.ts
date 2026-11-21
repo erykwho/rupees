@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureAuditBackfill,
+  recordAuditEvent,
+  toGoalSnapshot,
+} from "@/lib/audit-service";
 
 const goalSchema = z
   .object({
@@ -67,10 +72,30 @@ export async function PUT(request: Request) {
       );
     }
 
-    const goal = await prisma.allocationGoal.upsert({
-      where: { userId: user.id },
-      update: parsed.data,
-      create: { userId: user.id, ...parsed.data },
+    await ensureAuditBackfill(user.id);
+
+    const goal = await prisma.$transaction(async (tx) => {
+      const existing = await tx.allocationGoal.findUnique({
+        where: { userId: user.id },
+      });
+
+      const saved = await tx.allocationGoal.upsert({
+        where: { userId: user.id },
+        update: parsed.data,
+        create: { userId: user.id, ...parsed.data },
+      });
+
+      await recordAuditEvent(tx, {
+        userId: user.id,
+        entityType: "GOAL",
+        entityId: saved.id,
+        entityLabel: "Objetivos de Alocação",
+        action: existing ? "UPDATE" : "CREATE",
+        beforeState: existing ? toGoalSnapshot(existing) : null,
+        afterState: toGoalSnapshot(saved),
+      });
+
+      return saved;
     });
 
     return NextResponse.json({ goal });

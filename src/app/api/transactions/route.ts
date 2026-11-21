@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  buildTransactionEntityLabel,
+  ensureAuditBackfill,
+  recordAuditEvent,
+  toTransactionSnapshot,
+} from "@/lib/audit-service";
 
 const createTransactionSchema = z.object({
   assetId: z.string().min(1),
@@ -107,28 +113,45 @@ export async function POST(request: Request) {
         : `${parsed.data.date}T12:00:00.000Z`
     );
 
-    const tx = await prisma.transaction.create({
-      data: {
-        userId: user.id,
-        assetId: asset.id,
-        date: parsedDate,
-        type: parsed.data.type,
-        quantity,
-        unitPrice: isAdjustment ? 1 : unitPrice,
-        totalAmount,
-        notes: parsed.data.notes ?? null,
-      },
-      include: {
-        asset: {
-          select: {
-            id: true,
-            ticker: true,
-            assetClass: true,
-            currency: true,
-            sector: true,
+    await ensureAuditBackfill(user.id);
+
+    const tx = await prisma.$transaction(async (db) => {
+      const created = await db.transaction.create({
+        data: {
+          userId: user.id,
+          assetId: asset.id,
+          date: parsedDate,
+          type: parsed.data.type,
+          quantity,
+          unitPrice: isAdjustment ? 1 : unitPrice,
+          totalAmount,
+          notes: parsed.data.notes ?? null,
+        },
+        include: {
+          asset: {
+            select: {
+              id: true,
+              ticker: true,
+              assetClass: true,
+              currency: true,
+              sector: true,
+            },
           },
         },
-      },
+      });
+
+      const snap = toTransactionSnapshot(created);
+      await recordAuditEvent(db, {
+        userId: user.id,
+        entityType: "TRANSACTION",
+        entityId: created.id,
+        entityLabel: buildTransactionEntityLabel(snap),
+        action: "CREATE",
+        beforeState: null,
+        afterState: snap,
+      });
+
+      return created;
     });
 
     return NextResponse.json(

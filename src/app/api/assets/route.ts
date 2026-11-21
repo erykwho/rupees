@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureAuditBackfill,
+  recordAuditEvent,
+  toAssetSnapshot,
+} from "@/lib/audit-service";
 
 const createAssetSchema = z.object({
   ticker: z.string().trim().min(1).max(20),
@@ -61,19 +66,35 @@ export async function POST(request: Request) {
         ? "MANUAL"
         : "AUTO_YAHOO");
 
-    const asset = await prisma.asset.create({
-      data: {
+    await ensureAuditBackfill(user.id);
+
+    const asset = await prisma.$transaction(async (tx) => {
+      const created = await tx.asset.create({
+        data: {
+          userId: user.id,
+          ticker: normalizedTicker,
+          assetClass,
+          sector,
+          currency,
+          targetPctInClass,
+          priceMode,
+          manualPrice:
+            priceMode === "MANUAL" ? (manualPrice ?? 1) : (manualPrice ?? null),
+          isActive: isActive ?? true,
+        },
+      });
+
+      await recordAuditEvent(tx, {
         userId: user.id,
-        ticker: normalizedTicker,
-        assetClass,
-        sector,
-        currency,
-        targetPctInClass,
-        priceMode,
-        manualPrice:
-          priceMode === "MANUAL" ? (manualPrice ?? 1) : (manualPrice ?? null),
-        isActive: isActive ?? true,
-      },
+        entityType: "ASSET",
+        entityId: created.id,
+        entityLabel: created.ticker,
+        action: "CREATE",
+        beforeState: null,
+        afterState: toAssetSnapshot(created),
+      });
+
+      return created;
     });
 
     return NextResponse.json({ asset }, { status: 201 });

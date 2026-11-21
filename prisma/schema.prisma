@@ -32,6 +32,19 @@ enum TransactionType {
   BALANCE_ADJUSTMENT
 }
 
+enum AuditEntityType {
+  ASSET
+  TRANSACTION
+  GOAL
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  REVERT
+}
+
 model User {
   id           String          @id @default(cuid())
   email        String          @unique
@@ -42,6 +55,7 @@ model User {
   goal         AllocationGoal?
   assets       Asset[]
   transactions Transaction[]
+  auditEvents  AuditEvent[]
 }
 
 model AllocationGoal {
@@ -121,4 +135,23 @@ model HistoricalQuoteSync {
   coveredFrom String   // Formato "YYYY-MM-DD"
   coveredTo   String   // Formato "YYYY-MM-DD"
   updatedAt   DateTime @updatedAt
+}
+
+model AuditEvent {
+  id             String          @id @default(cuid())
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType     AuditEntityType
+  entityId       String
+  entityLabel    String
+  action         AuditAction
+  beforeState    Json?
+  afterState     Json?
+  revertsEventId String?
+  revertsEvent   AuditEvent?     @relation("EventReversion", fields: [revertsEventId], references: [id], onDelete: SetNull)
+  revertedBy     AuditEvent[]    @relation("EventReversion")
+  createdAt      DateTime        @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, entityType, entityId, createdAt])
 }
