@@ -54,6 +54,12 @@ enum FixedIncomeIndex {
   PREFIXED
 }
 
+enum TickerValidationStatus {
+  VERIFIED
+  PENDING
+  INVALID
+}
+
 model User {
   id           String          @id @default(cuid())
   email        String          @unique
@@ -83,24 +89,25 @@ model AllocationGoal {
 }
 
 model Asset {
-  id               String            @id @default(cuid())
-  userId           String
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ticker           String
-  assetClass       AssetClass
-  sector           String            @default("Outros")
-  currency         Currency          @default(BRL)
-  targetPctInClass Decimal           @default(0) @db.Decimal(6, 2)
-  priceMode        PriceMode         @default(AUTO_YAHOO)
-  manualPrice      Decimal?          @db.Decimal(18, 6)
-  isActive         Boolean           @default(true)
-  fixedIncomeIndex FixedIncomeIndex?
-  fixedIncomeRate  Decimal?          @db.Decimal(8, 4)
-  maturityDate     DateTime?
-  taxExempt        Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  transactions     Transaction[]
+  id                     String                 @id @default(cuid())
+  userId                 String
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker                 String
+  assetClass             AssetClass
+  sector                 String                 @default("Outros")
+  currency               Currency               @default(BRL)
+  targetPctInClass       Decimal                @default(0) @db.Decimal(6, 2)
+  priceMode              PriceMode              @default(AUTO_YAHOO)
+  manualPrice            Decimal?               @db.Decimal(18, 6)
+  isActive               Boolean                @default(true)
+  tickerValidationStatus TickerValidationStatus @default(VERIFIED)
+  fixedIncomeIndex       FixedIncomeIndex?
+  fixedIncomeRate        Decimal?               @db.Decimal(8, 4)
+  maturityDate           DateTime?
+  taxExempt              Boolean                @default(false)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  transactions           Transaction[]
 
   @@unique([userId, ticker])
   @@index([userId, assetClass])

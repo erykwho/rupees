@@ -211,6 +211,7 @@ export function computePortfolioSummary(params: {
       priceMode: item.asset.priceMode,
       manualPrice: item.asset.manualPrice,
       isActive: item.asset.isActive,
+      tickerValidationStatus: item.asset.tickerValidationStatus ?? "VERIFIED",
       fixedIncomeIndex: item.asset.fixedIncomeIndex ?? null,
       fixedIncomeRate: item.asset.fixedIncomeRate ?? null,
       maturityDate: maturityIso,

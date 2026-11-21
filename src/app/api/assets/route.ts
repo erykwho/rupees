@@ -7,6 +7,13 @@ import {
   recordAuditEvent,
   toAssetSnapshot,
 } from "@/lib/audit-service";
+import {
+  type AssetClassKey,
+  type TickerValidationStatusKey,
+  isVariableIncomeClass,
+} from "@/lib/domain/types";
+import { normalizeTicker } from "@/lib/domain/ticker-validation";
+import { validateTickerOnYahoo } from "@/lib/ticker-validator";
 
 const fixedIncomeIndexSchema = z
   .enum([
@@ -39,6 +46,7 @@ const createAssetSchema = z.object({
   fixedIncomeRate: z.coerce.number().min(0).max(1000).nullable().optional(),
   maturityDate: z.string().trim().nullable().optional(),
   taxExempt: z.boolean().optional(),
+  allowUnverifiedOnUnavailable: z.boolean().optional(),
 });
 
 function parseOptionalMaturityDate(raw: string | null | undefined): Date | null {
@@ -89,15 +97,52 @@ export async function POST(request: Request) {
       fixedIncomeRate,
       maturityDate,
       taxExempt,
+      allowUnverifiedOnUnavailable,
     } = parsed.data;
 
-    const normalizedTicker = ticker.toUpperCase();
+    const normalizedTicker = normalizeTicker(ticker, assetClass as AssetClassKey);
     const currency =
       assetClass === "US_STOCK" || assetClass === "US_REIT" ? "USD" : "BRL";
     const isFixedIncome =
       assetClass === "FIXED_INCOME" || assetClass === "EMERGENCY_RESERVE";
     const priceMode =
       parsed.data.priceMode ?? (isFixedIncome ? "MANUAL" : "AUTO_YAHOO");
+
+    let tickerValidationStatus: TickerValidationStatusKey = "VERIFIED";
+
+    if (isVariableIncomeClass(assetClass as AssetClassKey)) {
+      const validation = await validateTickerOnYahoo(
+        normalizedTicker,
+        assetClass as AssetClassKey
+      );
+
+      if (validation.status === "INVALID") {
+        return NextResponse.json(
+          {
+            error:
+              validation.reason ??
+              "Ticker inválido para a bolsa da classe selecionada.",
+            code: "INVALID_TICKER",
+          },
+          { status: 422 }
+        );
+      }
+
+      if (validation.status === "UNAVAILABLE") {
+        if (!allowUnverifiedOnUnavailable) {
+          return NextResponse.json(
+            {
+              error:
+                validation.reason ??
+                "Não foi possível consultar o Yahoo Finance no momento.",
+              code: "YAHOO_UNAVAILABLE",
+            },
+            { status: 503 }
+          );
+        }
+        tickerValidationStatus = "PENDING";
+      }
+    }
 
     await ensureAuditBackfill(user.id);
 
@@ -114,6 +159,7 @@ export async function POST(request: Request) {
           manualPrice:
             priceMode === "MANUAL" ? (manualPrice ?? 1) : (manualPrice ?? null),
           isActive: isActive ?? true,
+          tickerValidationStatus,
           fixedIncomeIndex: isFixedIncome ? (fixedIncomeIndex ?? null) : null,
           fixedIncomeRate: isFixedIncome ? (fixedIncomeRate ?? null) : null,
           maturityDate: isFixedIncome

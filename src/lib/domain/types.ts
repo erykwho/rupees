@@ -11,6 +11,7 @@ export type InvestmentClassKey = Exclude<AssetClassKey, "EMERGENCY_RESERVE">;
 export type CurrencyCode = "BRL" | "USD";
 export type PriceModeKey = "AUTO_YAHOO" | "MANUAL";
 export type TransactionTypeKey = "BUY" | "SELL" | "BALANCE_ADJUSTMENT";
+export type TickerValidationStatusKey = "VERIFIED" | "PENDING" | "INVALID";
 export type FixedIncomeIndexKey =
   | "CDI_PCT"
   | "CDI_PLUS"
@@ -39,6 +40,10 @@ export const FIXED_INCOME_INDEX_LABELS: Record<FixedIncomeIndexKey, string> = {
 
 export function isFixedIncomeClass(assetClass: AssetClassKey): boolean {
   return assetClass === "FIXED_INCOME" || assetClass === "EMERGENCY_RESERVE";
+}
+
+export function isVariableIncomeClass(assetClass: AssetClassKey): boolean {
+  return !isFixedIncomeClass(assetClass);
 }
 
 export const INVESTMENT_CLASSES: InvestmentClassKey[] = [
@@ -93,6 +98,7 @@ export interface AssetInput {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  tickerValidationStatus?: TickerValidationStatusKey;
   fixedIncomeIndex?: FixedIncomeIndexKey | null;
   fixedIncomeRate?: number | null;
   maturityDate?: Date | string | null;
@@ -126,6 +132,7 @@ export interface AssetSummary {
   priceMode: PriceModeKey;
   manualPrice: number | null;
   isActive: boolean;
+  tickerValidationStatus: TickerValidationStatusKey;
   fixedIncomeIndex: FixedIncomeIndexKey | null;
   fixedIncomeRate: number | null;
   maturityDate: string | null;
