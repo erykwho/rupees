@@ -1,5 +1,7 @@
 import {
+  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
+  type AssetClassKey,
   type AssetInput,
   type AssetPosition,
   type AssetSummary,
@@ -701,6 +703,52 @@ export function computeNextRebalanceAssets(
   });
 
   return candidates.slice(0, safeLimit).map((item) => item.asset);
+}
+
+export interface ClassDistributionSlice {
+  assetClass: AssetClassKey;
+  label: string;
+  valueBRL: number;
+  pct: number;
+  color: string;
+}
+
+export function computeClassDistribution(
+  summary: PortfolioSummary,
+  includeEmergencyReserve = true
+): ClassDistributionSlice[] {
+  const rawSlices: Array<{
+    assetClass: AssetClassKey;
+    label: string;
+    valueBRL: number;
+    color: string;
+  }> = summary.classes
+    .filter((c) => c.currentValueBRL > EPSILON)
+    .map((c) => ({
+      assetClass: c.assetClass,
+      label: c.label,
+      valueBRL: round2(c.currentValueBRL),
+      color: ASSET_CLASS_COLORS[c.assetClass],
+    }));
+
+  if (includeEmergencyReserve && summary.emergencyReserveBRL > EPSILON) {
+    rawSlices.push({
+      assetClass: "EMERGENCY_RESERVE",
+      label: ASSET_CLASS_LABELS.EMERGENCY_RESERVE,
+      valueBRL: round2(summary.emergencyReserveBRL),
+      color: ASSET_CLASS_COLORS.EMERGENCY_RESERVE,
+    });
+  }
+
+  const totalBRL = rawSlices.reduce((sum, s) => sum + s.valueBRL, 0);
+  if (totalBRL <= EPSILON) return [];
+
+  return rawSlices
+    .map((s) => ({
+      ...s,
+      pct: (s.valueBRL / totalBRL) * 100,
+    }))
+    .sort((a, b) => b.valueBRL - a.valueBRL);
 }
 
 function round2(n: number): number {

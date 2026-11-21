@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeAssetPosition,
+  computeClassDistribution,
   computeContributionPlan,
   computeDerivedClassTargets,
   computeHierarchyForGoal,
@@ -261,5 +262,38 @@ describe("computePortfolioSummary & computeContributionPlan", () => {
     );
     expect(fiSector?.status).toBe("UNTRACKED");
     expect(fiSector?.goalTargetPct).toBeNull();
+  });
+
+  it("computes class distribution with and without emergency reserve", () => {
+    const summary = computePortfolioSummary({
+      assets,
+      transactions,
+      goal: DEFAULT_GOAL,
+      quotes,
+      usdBrl: 5,
+    });
+
+    // Invested: IPCA=1000, WEGE3=2000, VOO=3000 (total 6000); Reserve: SELIC=5000 (grand total 11000)
+    const withReserve = computeClassDistribution(summary, true);
+    expect(withReserve.map((s) => s.assetClass)).toEqual([
+      "EMERGENCY_RESERVE",
+      "US_STOCK",
+      "BR_STOCK",
+      "FIXED_INCOME",
+    ]);
+    expect(withReserve[0].pct).toBeCloseTo((5000 / 11000) * 100, 2);
+    expect(withReserve.reduce((acc, s) => acc + s.pct, 0)).toBeCloseTo(100, 4);
+
+    const withoutReserve = computeClassDistribution(summary, false);
+    expect(withoutReserve.map((s) => s.assetClass)).toEqual([
+      "US_STOCK",
+      "BR_STOCK",
+      "FIXED_INCOME",
+    ]);
+    expect(withoutReserve[0].pct).toBeCloseTo(50, 2);
+    expect(withoutReserve.reduce((acc, s) => acc + s.pct, 0)).toBeCloseTo(
+      100,
+      4
+    );
   });
 });

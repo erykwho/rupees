@@ -8,13 +8,24 @@ import {
   ArrowUpRight,
   Compass,
   DollarSign,
+  PieChart as PieChartIcon,
   Plus,
   RefreshCw,
   Shield,
   Target,
   Wallet,
 } from "lucide-react";
-import { computeNextRebalanceAssets } from "@/lib/domain/calculations";
+import {
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import {
+  computeClassDistribution,
+  computeNextRebalanceAssets,
+} from "@/lib/domain/calculations";
 import {
   ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
@@ -24,6 +35,7 @@ import {
   isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
+import { useTheme } from "@/components/theme-provider";
 import { maskBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
@@ -32,10 +44,13 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ initialSummary }: DashboardViewProps) {
+  const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
+  const isDark = theme === "dark";
 
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [refreshing, setRefreshing] = useState(false);
+  const [showReserveInChart, setShowReserveInChart] = useState(true);
 
   async function handleRefreshQuotes() {
     setRefreshing(true);
@@ -55,6 +70,11 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
     [summary]
   );
 
+  const classDistribution = useMemo(
+    () => computeClassDistribution(summary, showReserveInChart),
+    [summary, showReserveInChart]
+  );
+
   const macroRows = useMemo(
     () => summary.hierarchy.filter((r) => r.group === "MACRO"),
     [summary.hierarchy]
@@ -64,6 +84,22 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
     () => summary.hierarchy.filter((r) => r.group === "REGION"),
     [summary.hierarchy]
   );
+
+  const tooltipContentStyle = isDark
+    ? {
+        borderRadius: "12px",
+        border: "1px solid #1e293b",
+        backgroundColor: "#0f172a",
+        color: "#f1f5f9",
+        fontSize: "12px",
+      }
+    : {
+        borderRadius: "12px",
+        border: "1px solid #e2e8f0",
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+        fontSize: "12px",
+      };
 
   const tickerValidationIssues = useMemo(
     () =>
@@ -278,100 +314,192 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
         )}
       </section>
 
-      {/* Macro Goals Summary */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-2.5">
-            <Target className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Objetivos Macros
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Estratégia atual configurada para sua carteira
+      {/* Distribution Pie Chart + Macro Goals */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Class Distribution Pie Chart */}
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2.5">
+              <PieChartIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Distribuição por Classe
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {showReserveInChart
+                    ? "Proporção sobre o patrimônio total"
+                    : "Proporção sobre a carteira investida"}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowReserveInChart((prev) => !prev)}
+              aria-pressed={!showReserveInChart}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                showReserveInChart
+                  ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-950"
+              )}
+            >
+              <Shield className="h-3.5 w-3.5" />
+              {showReserveInChart ? "Esconder reserva" : "Mostrar reserva"}
+            </button>
+          </div>
+
+          {classDistribution.length === 0 ? (
+            <div className="flex h-56 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
+              Nenhum valor investido para exibir.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={classDistribution}
+                      dataKey="valueBRL"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={48}
+                      outerRadius={82}
+                      paddingAngle={2}
+                      stroke={isDark ? "#0f172a" : "#ffffff"}
+                    >
+                      {classDistribution.map((entry) => (
+                        <Cell key={entry.assetClass} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => maskBRL(Number(value), isPrivate)}
+                      contentStyle={tooltipContentStyle}
+                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="space-y-2.5">
+                {classDistribution.map((item) => (
+                  <div
+                    key={item.assetClass}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span className="truncate font-medium">{item.label}</span>
+                    </span>
+                    <span className="shrink-0 font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                      {formatPct(item.pct)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Macro Goals Summary */}
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2.5">
+              <Target className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Objetivos Macros
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Estratégia atual configurada para sua carteira
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/objetivos"
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+            >
+              Alterar objetivos
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="space-y-4">
+            {/* Level 1: Renda Fixa vs Renda Variável */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Alocação Macro
               </p>
-            </div>
-          </div>
-
-          <Link
-            href="/objetivos"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-          >
-            Quer ajustar sua estratégia? Alterar objetivos
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {/* Level 1: Renda Fixa vs Renda Variável */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Alocação Macro
-            </p>
-            <div className="mt-3 space-y-3">
-              {macroRows.map((row) => (
-                <div key={row.key}>
-                  <div className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">
-                      {row.label}
-                    </span>
-                    <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                      <strong className="font-bold text-slate-900 dark:text-slate-100">
-                        {formatPct(row.actualPct)}
-                      </strong>{" "}
-                      <span className="text-slate-400 dark:text-slate-500">
-                        / alvo {formatPct(row.targetPct, 0)}
+              <div className="mt-3 space-y-3">
+                {macroRows.map((row) => (
+                  <div key={row.key}>
+                    <div className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">
+                        {row.label}
                       </span>
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
-                    <div
-                      className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Level 2: Brasil vs EUA (dentro de RV) */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Geografia (dentro de Renda Variável)
-            </p>
-            <div className="mt-3 space-y-3">
-              {regionRows.map((row) => (
-                <div key={row.key}>
-                  <div className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-slate-200">
-                      {row.label}
-                    </span>
-                    <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                      <strong className="font-bold text-slate-900 dark:text-slate-100">
-                        {formatPct(row.actualPct)}
-                      </strong>{" "}
-                      <span className="text-slate-400 dark:text-slate-500">
-                        / alvo {formatPct(row.targetPct, 0)}
+                      <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                        <strong className="font-bold text-slate-900 dark:text-slate-100">
+                          {formatPct(row.actualPct)}
+                        </strong>{" "}
+                        <span className="text-slate-400 dark:text-slate-500">
+                          / alvo {formatPct(row.targetPct, 0)}
+                        </span>
                       </span>
-                    </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
+                      <div
+                        className="h-full rounded-full bg-emerald-600 transition-all dark:bg-emerald-500"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
-                    <div
-                      className="h-full rounded-full bg-sky-600 transition-all dark:bg-sky-500"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
-                      }}
-                    />
+                ))}
+              </div>
+            </div>
+
+            {/* Level 2: Brasil vs EUA (dentro de RV) */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Geografia (dentro de Renda Variável)
+              </p>
+              <div className="mt-3 space-y-3">
+                {regionRows.map((row) => (
+                  <div key={row.key}>
+                    <div className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">
+                        {row.label}
+                      </span>
+                      <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                        <strong className="font-bold text-slate-900 dark:text-slate-100">
+                          {formatPct(row.actualPct)}
+                        </strong>{" "}
+                        <span className="text-slate-400 dark:text-slate-500">
+                          / alvo {formatPct(row.targetPct, 0)}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-700/70">
+                      <div
+                        className="h-full rounded-full bg-sky-600 transition-all dark:bg-sky-500"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, row.actualPct))}%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
