@@ -15,6 +15,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
+import { PrivacyToggle } from "@/components/privacy-toggle";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -211,19 +212,22 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
     <div className="min-h-screen bg-[#f6f7f9] text-slate-900 dark:bg-slate-950 dark:text-slate-100 lg:flex">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-slate-200/80 lg:bg-white dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <div className="flex h-16 items-center justify-between gap-2 px-5">
-          <div className="flex items-center gap-3">
+        <div className="flex h-16 items-center justify-between gap-2 px-4">
+          <div className="flex min-w-0 items-center gap-2.5">
             <BrandLogo />
-            <div>
+            <div className="min-w-0">
               <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
                 Rupees
               </span>
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Controle de Investimentos
               </p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-0.5">
+            <PrivacyToggle />
+            <ThemeToggle />
+          </div>
         </div>
 
         <nav
@@ -340,6 +344,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         </div>
 
         <div className="flex items-center gap-1">
+          <PrivacyToggle />
           <ThemeToggle />
         </div>
       </header>

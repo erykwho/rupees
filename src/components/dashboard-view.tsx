@@ -34,7 +34,9 @@ import {
   formatBRL,
   formatPct,
 } from "@/lib/domain/types";
+import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
+import { maskBRL, maskSignedBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
 const SECTOR_PALETTE = [
@@ -58,6 +60,7 @@ interface DashboardViewProps {
 
 export function DashboardView({ initialSummary }: DashboardViewProps) {
   const { theme } = useTheme();
+  const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
 
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
@@ -169,12 +172,12 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
             <Wallet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {formatBRL(summary.totalInvestedValueBRL)}
+            {maskBRL(summary.totalInvestedValueBRL, isPrivate)}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Custo aplicado:{" "}
             <span className="font-mono tabular-nums">
-              {formatBRL(summary.totalCostBasisBRL)}
+              {maskBRL(summary.totalCostBasisBRL, isPrivate)}
             </span>
           </p>
         </div>
@@ -196,8 +199,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                 : "text-rose-600 dark:text-rose-400"
             )}
           >
-            {isPositiveReturn ? "+" : ""}
-            {formatBRL(summary.totalProfitLossBRL)}
+            {maskSignedBRL(summary.totalProfitLossBRL, isPrivate)}
           </p>
           <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
             Rentabilidade:{" "}
@@ -221,7 +223,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
             <Shield className="h-4 w-4 text-slate-500 dark:text-slate-400" />
           </div>
           <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {formatBRL(summary.emergencyReserveBRL)}
+            {maskBRL(summary.emergencyReserveBRL, isPrivate)}
           </p>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Separada do balanceamento
@@ -234,7 +236,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
             <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <p className="mt-2 font-mono text-2xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-slate-100">
-            {formatBRL(summary.grandTotalBRL)}
+            {maskBRL(summary.grandTotalBRL, isPrivate)}
           </p>
           <Link
             href="/aporte"
@@ -319,7 +321,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono text-slate-800 tabular-nums dark:text-slate-200">
-                      {formatBRL(c.currentValueBRL)}
+                      {maskBRL(c.currentValueBRL, isPrivate)}
                     </td>
                     <td
                       className={cn(
@@ -329,8 +331,9 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                           : "text-slate-400 dark:text-slate-500"
                       )}
                     >
-                      {underTarget ? "+" : ""}
-                      {formatBRL(c.balanceNeededBRL)}
+                      {isPrivate
+                        ? maskBRL(c.balanceNeededBRL, true)
+                        : `${underTarget ? "+" : ""}${formatBRL(c.balanceNeededBRL)}`}
                     </td>
                   </tr>
                 );
@@ -460,7 +463,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value) => formatBRL(Number(value))}
+                      formatter={(value) => maskBRL(Number(value), isPrivate)}
                       contentStyle={tooltipContentStyle}
                       itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
                     />
