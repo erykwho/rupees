@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { RupeesLogo } from "@/components/rupees-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -57,23 +58,16 @@ interface AppShellProps {
 
 function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
   const boxClass = size === "sm" ? "h-8 w-8 rounded-lg" : "h-9 w-9 rounded-xl";
-  const svgClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  const svgClass = size === "sm" ? "h-5 w-5" : "h-6 w-6";
 
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center bg-emerald-600 shadow-sm shadow-emerald-600/20",
+        "flex shrink-0 items-center justify-center border border-slate-200/80 bg-slate-50/80 shadow-2xs dark:border-slate-800 dark:bg-slate-800/60",
         boxClass
       )}
     >
-      <svg viewBox="0 0 32 32" className={svgClass} fill="none">
-        <path
-          d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
-          fill="#A7F3D0"
-        />
-        <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
-        <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#059669" />
-      </svg>
+      <RupeesLogo className={svgClass} />
     </div>
   );
 }

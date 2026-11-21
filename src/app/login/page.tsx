@@ -1,5 +1,6 @@
 import { signIn } from "@/lib/auth";
 import { ShieldCheck } from "lucide-react";
+import { RupeesLogo } from "@/components/rupees-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function LoginPage(props: {
@@ -21,15 +22,8 @@ export default async function LoginPage(props: {
 
       <div className="w-full max-w-sm rounded-2xl border border-slate-200/90 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 shadow-md shadow-emerald-600/20">
-            <svg viewBox="0 0 32 32" className="h-8 w-8" fill="none">
-              <path
-                d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
-                fill="#A7F3D0"
-              />
-              <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
-              <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#047857" />
-            </svg>
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200/80 bg-slate-50/80 shadow-sm dark:border-slate-800 dark:bg-slate-800/60">
+            <RupeesLogo className="h-11 w-11" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
             Rupees
