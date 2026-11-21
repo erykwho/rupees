@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Layers,
   Loader2,
@@ -125,6 +126,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
     useState<InvestmentClassKey>("BR_STOCK");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
 
   function handleSelectClass(cls: AssetClassKey | "ALL") {
     setSelectedClass(cls);
@@ -787,8 +789,258 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       </div>
 
       {/* Assets Table */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="overflow-x-auto">
+      <div className="-mx-4 overflow-hidden border-y border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900 sm:-mx-6 md:mx-0 md:rounded-2xl md:border">
+        {/* Mobile Compact 3-Column Accordion Table */}
+        <div className="md:hidden">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                <th className="py-3 pl-3 pr-1.5">Ativo</th>
+                <th className="px-1.5 py-3 text-right">Total</th>
+                <th className="py-3 pl-1.5 pr-3 text-right">Alvo / Real</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredAssets.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-4 py-10 text-center text-sm text-slate-400 dark:text-slate-500"
+                  >
+                    Nenhum ativo encontrado.
+                  </td>
+                </tr>
+              ) : (
+                filteredAssets.map((a) => {
+                  const isFixedOrReserve =
+                    a.assetClass === "FIXED_INCOME" ||
+                    a.assetClass === "EMERGENCY_RESERVE";
+                  const profitPos = a.profitLossBRL >= 0;
+                  const isExpanded = expandedAssetId === a.id;
+                  const toggleExpanded = () =>
+                    setExpandedAssetId((prev) => (prev === a.id ? null : a.id));
+                  const subtitle =
+                    selectedClass === "ALL"
+                      ? a.sector
+                        ? `${ASSET_CLASS_LABELS[a.assetClass]} · ${a.sector}`
+                        : ASSET_CLASS_LABELS[a.assetClass]
+                      : a.sector || ASSET_CLASS_LABELS[a.assetClass];
+
+                  return (
+                    <Fragment key={a.id}>
+                      <tr
+                        onClick={toggleExpanded}
+                        className={cn(
+                          "cursor-pointer transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50",
+                          isExpanded && "bg-slate-50/60 dark:bg-slate-800/40",
+                          !a.isActive && "opacity-60"
+                        )}
+                      >
+                        <td className="py-3 pl-3 pr-1.5 align-top">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <button
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-label={`${isExpanded ? "Recolher" : "Expandir"} detalhes de ${a.ticker}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleExpanded();
+                              }}
+                              className="inline-flex items-center gap-1 text-left font-mono font-bold text-slate-900 focus:outline-none dark:text-slate-100"
+                            >
+                              <span>{a.ticker}</span>
+                              <ChevronDown
+                                className={cn(
+                                  "h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform duration-150 dark:text-slate-500",
+                                  isExpanded && "rotate-180 text-emerald-600 dark:text-emerald-400"
+                                )}
+                              />
+                            </button>
+                            {!isFixedOrReserve &&
+                              a.tickerValidationStatus === "INVALID" && (
+                                <span
+                                  title="Ticker não encontrado na bolsa desta classe no Yahoo Finance"
+                                  className="inline-flex items-center rounded-md bg-rose-100 px-1 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/70 dark:text-rose-300"
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                </span>
+                              )}
+                            {!isFixedOrReserve &&
+                              a.tickerValidationStatus === "PENDING" && (
+                                <span
+                                  title="Aguardando revalidação automática no Yahoo Finance"
+                                  className="inline-flex items-center rounded-md bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300"
+                                >
+                                  <Clock className="h-3 w-3" />
+                                </span>
+                              )}
+                            {!a.isActive && (
+                              <span className="rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                Inativo
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 max-w-[135px] truncate text-xs text-slate-500 dark:text-slate-400">
+                            {subtitle}
+                          </p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-1.5 py-3 text-right align-top font-mono tabular-nums">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">
+                            {maskBRL(a.currentValueBRL, isPrivate)}
+                          </div>
+                          {a.quantity > 0 && !isFixedOrReserve && (
+                            <div
+                              className={cn(
+                                "text-[11px] font-semibold",
+                                profitPos
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-rose-600 dark:text-rose-400"
+                              )}
+                            >
+                              {profitPos ? "+" : ""}
+                              {formatPct(a.profitLossPct, 1)}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap py-3 pl-1.5 pr-3 text-right align-top font-mono tabular-nums">
+                          {a.assetClass === "EMERGENCY_RESERVE" ? (
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
+                              Reserva
+                            </span>
+                          ) : (
+                            <>
+                              <div className="text-xs text-slate-600 dark:text-slate-400">
+                                {formatPct(a.globalTargetPct)} /{" "}
+                                <strong className="text-slate-900 dark:text-slate-100">
+                                  {formatPct(a.actualPct)}
+                                </strong>
+                              </div>
+                              <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                                {formatPct(a.targetPctInClass)} classe
+                              </div>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className="bg-slate-50/90 dark:bg-slate-800/40">
+                          <td colSpan={3} className="px-3 py-3">
+                            {!isFixedOrReserve && (
+                              <div className="mb-3 grid grid-cols-3 gap-2 font-mono tabular-nums">
+                                <div>
+                                  <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+                                    Qtd
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {maskQty(a.quantity, isPrivate, a.assetClass)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+                                    Preço Médio
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {a.quantity > 0
+                                      ? formatCurrency(a.avgPriceNative, a.currency)
+                                      : "—"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+                                    Cotação
+                                  </p>
+                                  <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {formatCurrency(
+                                      a.currentPriceNative,
+                                      a.currency
+                                    )}
+                                  </p>
+                                  {a.currency === "USD" && (
+                                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                                      {formatBRL(a.currentPriceBRL)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div
+                              className={cn(
+                                "flex flex-wrap items-center justify-between gap-2",
+                                !isFixedOrReserve &&
+                                  "border-t border-slate-200/70 pt-2.5 dark:border-slate-700/70"
+                              )}
+                            >
+                              <div className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+                                <span className="font-medium text-slate-700 dark:text-slate-300">
+                                  {ASSET_CLASS_LABELS[a.assetClass]}
+                                </span>
+                                {a.sector && <span> · {a.sector}</span>}
+                                {a.assetClass === "EMERGENCY_RESERVE" ? (
+                                  <span className="block text-[11px] text-slate-400 dark:text-slate-500">
+                                    Reserva de emergência
+                                  </span>
+                                ) : (
+                                  <span className="block font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                                    {formatPct(a.targetPctInClass)} na classe
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {isFixedOrReserve && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openBalanceModal(a);
+                                    }}
+                                    className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
+                                  >
+                                    Saldo
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditModal(a);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteAsset(a);
+                                  }}
+                                  aria-label={`Excluir ${a.ticker}`}
+                                  title="Excluir ativo"
+                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-rose-900/60 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Desktop / Tablet Full 7-Column Table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
