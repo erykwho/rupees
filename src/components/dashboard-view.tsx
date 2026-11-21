@@ -88,15 +88,23 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
     color: ASSET_CLASS_COLORS[c.assetClass],
   }));
 
-  const sectorData = summary.sectors
+  const sectorRows = summary.sectors
     .filter(
-      (s) => s.assetClass === selectedSectorClass && s.currentValueBRL > 0
+      (s) =>
+        s.assetClass === selectedSectorClass &&
+        (s.currentValueBRL > 0 ||
+          (s.goalTargetPct ?? 0) > 0 ||
+          s.targetPctInClass > 0)
     )
     .map((s) => ({
       name: s.sector,
       value: Number(s.currentValueBRL.toFixed(2)),
       pct: Number(s.actualPctInClass.toFixed(1)),
+      goalPct: s.goalTargetPct,
+      status: s.status,
     }));
+
+  const sectorPieData = sectorRows.filter((s) => s.value > 0);
 
   const isPositiveReturn = summary.totalProfitLossBRL >= 0;
 
@@ -435,62 +443,95 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
             </div>
           </div>
 
-          {sectorData.length === 0 ? (
+          {sectorRows.length === 0 ? (
             <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-              Nenhum valor investido nesta classe ainda.
+              Nenhum valor investido ou meta de setor nesta classe ainda.
             </div>
           ) : (
             <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
               <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={sectorData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={48}
-                      outerRadius={82}
-                      paddingAngle={2}
-                      stroke={isDark ? "#0f172a" : "#ffffff"}
-                    >
-                      {sectorData.map((entry, idx) => (
-                        <Cell
-                          key={entry.name}
-                          fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => maskBRL(Number(value), isPrivate)}
-                      contentStyle={tooltipContentStyle}
-                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                {sectorPieData.length === 0 ? (
+                  <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 px-4 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                    Nenhum valor investido nesta classe ainda.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={sectorPieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={48}
+                        outerRadius={82}
+                        paddingAngle={2}
+                        stroke={isDark ? "#0f172a" : "#ffffff"}
+                      >
+                        {sectorPieData.map((entry, idx) => (
+                          <Cell
+                            key={entry.name}
+                            fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => maskBRL(Number(value), isPrivate)}
+                        contentStyle={tooltipContentStyle}
+                        itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
               <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                {sectorData.map((s, idx) => (
-                  <div
-                    key={s.name}
-                    className="flex items-center justify-between gap-2 text-xs"
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor:
-                            SECTOR_PALETTE[idx % SECTOR_PALETTE.length],
-                        }}
-                      />
-                      <span className="truncate">{s.name}</span>
-                    </span>
-                    <span className="shrink-0 font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {formatPct(s.pct)}
-                    </span>
-                  </div>
-                ))}
+                {sectorRows.map((s) => {
+                  const pieIdx = sectorPieData.findIndex(
+                    (p) => p.name === s.name
+                  );
+                  return (
+                    <div
+                      key={s.name}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
+                        <span
+                          className={cn(
+                            "h-2.5 w-2.5 shrink-0 rounded-full",
+                            pieIdx < 0 &&
+                              "border border-dashed border-slate-400 bg-transparent dark:border-slate-500"
+                          )}
+                          style={
+                            pieIdx >= 0
+                              ? {
+                                  backgroundColor:
+                                    SECTOR_PALETTE[
+                                      pieIdx % SECTOR_PALETTE.length
+                                    ],
+                                }
+                              : undefined
+                          }
+                        />
+                        <span className="truncate">{s.name}</span>
+                        {s.status === "UNCOVERED" && (
+                          <span className="shrink-0 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
+                            Sem ativos
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-right font-mono tabular-nums">
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {formatPct(s.pct)}
+                        </span>
+                        {s.goalPct !== null && (
+                          <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                            / alvo {formatPct(s.goalPct, 0)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

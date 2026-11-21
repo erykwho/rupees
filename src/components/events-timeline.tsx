@@ -10,6 +10,7 @@ import {
   ChevronUp,
   History,
   Info,
+  Layers,
   Loader2,
   PieChart,
   RotateCcw,
@@ -44,6 +45,7 @@ const ENTITY_FILTER_OPTIONS: Array<{
   { value: "ASSET", label: "Carteira" },
   { value: "TRANSACTION", label: "Lançamentos" },
   { value: "GOAL", label: "Objetivos" },
+  { value: "SECTOR_GOAL", label: "Setores" },
 ];
 
 const ACTION_FILTER_OPTIONS: Array<{
@@ -60,6 +62,7 @@ const ACTION_FILTER_OPTIONS: Array<{
 function getEntityIcon(entityType: AuditEntityTypeKey) {
   if (entityType === "ASSET") return PieChart;
   if (entityType === "TRANSACTION") return ArrowLeftRight;
+  if (entityType === "SECTOR_GOAL") return Layers;
   return Target;
 }
 
@@ -84,6 +87,8 @@ function getEntityIconBoxClass(entityType: AuditEntityTypeKey): string {
       return "bg-violet-50 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400";
     case "GOAL":
       return "bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400";
+    case "SECTOR_GOAL":
+      return "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400";
   }
 }
 

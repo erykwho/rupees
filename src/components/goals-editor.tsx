@@ -11,6 +11,7 @@ import {
   type PortfolioSummary,
   formatPct,
 } from "@/lib/domain/types";
+import { SectorGoalsSection } from "@/components/sector-goals-section";
 
 interface GoalsEditorProps {
   initialGoal: GoalInput;
@@ -279,6 +280,9 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
           })}
         </div>
       </section>
+
+      {/* Sector Goals Section */}
+      <SectorGoalsSection initialSummary={summary} />
     </div>
   );
 }
