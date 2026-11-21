@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:import": "tsx prisma/import-sheets.ts",
-    "db:fix-event-dates": "tsx prisma/fix-event-dates.ts"
+    "db:fix-event-dates": "tsx prisma/fix-event-dates.ts",
+    "db:cleanup-mar2025-reversals": "tsx prisma/cleanup-mar2025-reversals.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
