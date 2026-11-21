@@ -132,62 +132,117 @@ function ProjectionTooltip({
   if (!pt) return null;
 
   return (
-    <div className="min-w-[230px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
-      <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
-        {pt.tooltipLabel}
-      </p>
-      <div className="space-y-1.5 tabular-nums">
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Líquido (após IR)
+    <div className="pointer-events-none hidden min-w-[180px] max-w-[235px] rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-2 text-[11px] shadow-md backdrop-blur-xs sm:block dark:border-slate-700 dark:bg-slate-900/95">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1 dark:border-slate-800">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {pt.tooltipLabel}
+        </span>
+        <span className="text-[10px] font-semibold text-emerald-600 tabular-nums dark:text-emerald-400">
+          +{maskBRL(pt.netGainBRL, isPrivate)}
+        </span>
+      </div>
+      <div className="space-y-1 tabular-nums">
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Líquido
           </span>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
             {maskBRL(pt.netValueBRL, isPrivate)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-pink-500" />
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-pink-500" />
             Bruto
           </span>
           <span className="font-medium text-slate-700 dark:text-slate-200">
             {maskBRL(pt.grossValueBRL, isPrivate)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-slate-400" />
-            Capital base
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            Base
           </span>
           <span className="font-medium text-slate-600 dark:text-slate-300">
             {maskBRL(pt.principalBRL, isPrivate)}
           </span>
         </div>
-        <div className="border-t border-slate-100 pt-1.5 dark:border-slate-800">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-slate-500 dark:text-slate-400">
-              Ganho líquido
-            </span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-              +{maskBRL(pt.netGainBRL, isPrivate)}
-            </span>
-          </div>
-          <div className="mt-0.5 flex items-center justify-between gap-4">
-            <span className="text-slate-500 dark:text-slate-400">
-              Ganho bruto
-            </span>
-            <span className="text-slate-600 dark:text-slate-300">
-              +{maskBRL(pt.grossGainBRL, isPrivate)}
-            </span>
-          </div>
-        </div>
         {pt.maturedTickers.length > 0 && (
-          <div className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+          <div className="mt-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
             Vencimento: {pt.maturedTickers.join(", ")}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+interface ProjectionMobileReadoutProps {
+  point: FixedIncomeProjectionPoint | null;
+  isPointActive: boolean;
+  isPrivate: boolean;
+}
+
+function ProjectionMobileReadout({
+  point,
+  isPointActive,
+  isPrivate,
+}: ProjectionMobileReadoutProps) {
+  if (!point) return null;
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-3 py-2 text-[11px] tabular-nums transition-colors",
+        isPointActive
+          ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800/70 dark:bg-emerald-950/25"
+          : "border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/40"
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-2 border-b border-slate-200/60 pb-1 dark:border-slate-700/60">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">
+          {point.tooltipLabel}
+        </span>
+        <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+          Ganho líq. +{maskBRL(point.netGainBRL, isPrivate)}
+        </span>
+      </div>
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        <div>
+          <span className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Líquido
+          </span>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">
+            {maskBRL(point.netValueBRL, isPrivate)}
+          </p>
+        </div>
+        <div>
+          <span className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-pink-500" />
+            Bruto
+          </span>
+          <p className="font-medium text-slate-700 dark:text-slate-200">
+            {maskBRL(point.grossValueBRL, isPrivate)}
+          </p>
+        </div>
+        <div>
+          <span className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            Base
+          </span>
+          <p className="font-medium text-slate-600 dark:text-slate-300">
+            {maskBRL(point.principalBRL, isPrivate)}
+          </p>
+        </div>
+      </div>
+      {point.maturedTickers.length > 0 && (
+        <div className="mt-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+          Vencimento: {point.maturedTickers.join(", ")}
+        </div>
+      )}
     </div>
   );
 }
@@ -675,12 +730,20 @@ export function FixedIncomeProjectionView({
             isInteracting={projectionZoom.isInteracting}
             rangeLabel={projectionZoom.rangeLabel}
             onResetZoom={projectionZoom.resetZoom}
+            mobileReadout={
+              <ProjectionMobileReadout
+                point={projectionZoom.displayPoint}
+                isPointActive={projectionZoom.isPointActive}
+                isPrivate={isPrivate}
+              />
+            }
             className="h-[280px] sm:h-[320px]"
           >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={projectionZoom.visibleData}
                 margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                {...projectionZoom.chartEventHandlers}
               >
                 <defs>
                   <linearGradient id="fiGrossGrad" x1="0" y1="0" x2="0" y2="1">
@@ -717,11 +780,14 @@ export function FixedIncomeProjectionView({
                   width={68}
                 />
                 <Tooltip
-                  wrapperStyle={
-                    projectionZoom.isInteracting
+                  offset={28}
+                  position={{ y: 4 }}
+                  wrapperStyle={{
+                    pointerEvents: "none",
+                    ...(projectionZoom.isInteracting
                       ? { display: "none" }
-                      : undefined
-                  }
+                      : {}),
+                  }}
                   content={<ProjectionTooltip isPrivate={isPrivate} />}
                 />
                 <Area
