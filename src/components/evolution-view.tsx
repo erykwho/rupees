@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   Calendar,
   Coins,
+  Layers,
   Plus,
   RefreshCw,
   Shield,
@@ -84,9 +85,18 @@ function formatCompactBRL(value: number): string {
 interface EvolutionTooltipProps {
   active?: boolean;
   payload?: Array<{ payload?: AggregatedEvolutionPoint }>;
+  splitByClass?: boolean;
+  activeClasses?: AssetClassKey[];
+  chartMode?: EvolutionChartMode;
 }
 
-function EvolutionTooltip({ active, payload }: EvolutionTooltipProps) {
+function EvolutionTooltip({
+  active,
+  payload,
+  splitByClass = false,
+  activeClasses = [],
+  chartMode = "PATRIMONIO",
+}: EvolutionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const pt = payload[0]?.payload;
   if (!pt) return null;
@@ -94,15 +104,59 @@ function EvolutionTooltip({ active, payload }: EvolutionTooltipProps) {
   const isPositive = pt.profitLossBRL >= 0;
 
   return (
-    <div className="min-w-[210px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
+    <div className="min-w-[220px] rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur-xs dark:border-slate-700 dark:bg-slate-900/95">
       <p className="mb-2 border-b border-slate-100 pb-1.5 font-semibold text-slate-800 dark:border-slate-800 dark:text-slate-100">
         {pt.tooltipLabel}
       </p>
       <div className="space-y-1.5 tabular-nums">
+        {splitByClass && activeClasses.length > 1 && (
+          <div className="space-y-1 border-b border-slate-100 pb-1.5 dark:border-slate-800">
+            {activeClasses.map((cls) => {
+              const value =
+                chartMode === "PATRIMONIO"
+                  ? pt.classMarketValue[cls]
+                  : chartMode === "GANHO"
+                    ? pt.classProfitLoss[cls]
+                    : pt.classProfitLossPct[cls];
+              const isPos = value >= 0;
+              return (
+                <div
+                  key={cls}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                    />
+                    {ASSET_CLASS_LABELS[cls]}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      chartMode === "PATRIMONIO"
+                        ? "text-slate-900 dark:text-slate-100"
+                        : isPos
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                    )}
+                  >
+                    {chartMode === "RENTABILIDADE"
+                      ? `${isPos ? "+" : ""}${formatPct(value, 1)}`
+                      : chartMode === "GANHO"
+                        ? `${isPos ? "+" : ""}${formatBRL(value)}`
+                        : formatBRL(value)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
             <span className="h-2 w-2 rounded-full bg-emerald-600" />
-            Patrimônio
+            {splitByClass ? "Total Patrimônio" : "Patrimônio"}
           </span>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
             {formatBRL(pt.marketValueBRL)}
@@ -111,7 +165,7 @@ function EvolutionTooltip({ active, payload }: EvolutionTooltipProps) {
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
             <span className="h-2 w-2 rounded-full bg-slate-400" />
-            Aportado
+            {splitByClass ? "Total Aportado" : "Aportado"}
           </span>
           <span className="font-medium text-slate-700 dark:text-slate-300">
             {formatBRL(pt.investedCostBRL)}
@@ -237,6 +291,7 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
   const [range, setRange] = useState<EvolutionRange>("ALL");
   const [granularity, setGranularity] = useState<EvolutionGranularity>("DAILY");
   const [chartMode, setChartMode] = useState<EvolutionChartMode>("PATRIMONIO");
+  const [splitByClass, setSplitByClass] = useState(false);
   const [contributionGrouping, setContributionGrouping] =
     useState<EvolutionGranularity>("MONTHLY");
 
@@ -618,9 +673,18 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {chartMode === "PATRIMONIO" && "Patrimônio vs. Aportado"}
-                  {chartMode === "GANHO" && "Evolução do Rendimento (R$)"}
-                  {chartMode === "RENTABILIDADE" && "Rentabilidade Acumulada (%)"}
+                  {chartMode === "PATRIMONIO" &&
+                    (splitByClass && activeClasses.length > 1
+                      ? "Patrimônio por Classe"
+                      : "Patrimônio vs. Aportado")}
+                  {chartMode === "GANHO" &&
+                    (splitByClass && activeClasses.length > 1
+                      ? "Rendimento por Classe (R$)"
+                      : "Evolução do Rendimento (R$)")}
+                  {chartMode === "RENTABILIDADE" &&
+                    (splitByClass && activeClasses.length > 1
+                      ? "Rentabilidade por Classe (%)"
+                      : "Rentabilidade Acumulada (%)")}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Visão {granularity === "DAILY" ? "diária" : "mensal"} ·{" "}
@@ -628,22 +692,44 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                 </p>
               </div>
 
-              <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
-                {CHART_MODES.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => setChartMode(m.value)}
-                    className={cn(
-                      "rounded-lg px-2.5 py-1.5 transition-colors",
-                      chartMode === m.value
-                        ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
-                        : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSplitByClass((prev) => !prev)}
+                  disabled={activeClasses.length <= 1}
+                  title={
+                    activeClasses.length <= 1
+                      ? "Selecione mais de uma classe (ou Total) para comparar linhas por classe"
+                      : "Alternar entre visão consolidada e uma linha por classe de ativo"
+                  }
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    splitByClass && activeClasses.length > 1
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Por classe
+                </button>
+
+                <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-0.5 text-xs font-semibold dark:bg-slate-800">
+                  {CHART_MODES.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setChartMode(m.value)}
+                      className={cn(
+                        "rounded-lg px-2.5 py-1.5 transition-colors",
+                        chartMode === m.value
+                          ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                          : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -739,107 +825,177 @@ export function EvolutionView({ initialData }: EvolutionViewProps) {
                             : formatCompactBRL(val)
                         }
                       />
-                      <Tooltip content={<EvolutionTooltip />} />
+                      <Tooltip
+                        content={
+                          <EvolutionTooltip
+                            splitByClass={splitByClass && activeClasses.length > 1}
+                            activeClasses={activeClasses}
+                            chartMode={chartMode}
+                          />
+                        }
+                      />
 
-                      {chartMode === "PATRIMONIO" && (
+                      {splitByClass && activeClasses.length > 1 ? (
                         <>
-                          <Area
-                            type="monotone"
-                            dataKey="marketValueBRL"
-                            name="Patrimônio"
-                            stroke="#10b981"
-                            strokeWidth={2.2}
-                            fill="url(#evoEmeraldGrad)"
-                            dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="investedCostBRL"
-                            name="Aportado"
-                            stroke={isDark ? "#94a3b8" : "#64748b"}
-                            strokeWidth={1.8}
-                            strokeDasharray="5 4"
-                            fill="none"
-                            dot={false}
-                            activeDot={{
-                              r: 4,
-                              strokeWidth: 0,
-                              fill: isDark ? "#94a3b8" : "#64748b",
-                            }}
-                          />
+                          {chartMode !== "PATRIMONIO" && (
+                            <ReferenceLine
+                              y={0}
+                              stroke={refLineStroke}
+                              strokeDasharray="3 3"
+                            />
+                          )}
+                          {activeClasses.map((cls) => (
+                            <Area
+                              key={cls}
+                              type="monotone"
+                              dataKey={(d: AggregatedEvolutionPoint) =>
+                                chartMode === "PATRIMONIO"
+                                  ? d.classMarketValue[cls]
+                                  : chartMode === "GANHO"
+                                    ? d.classProfitLoss[cls]
+                                    : d.classProfitLossPct[cls]
+                              }
+                              name={ASSET_CLASS_LABELS[cls]}
+                              stroke={ASSET_CLASS_COLORS[cls]}
+                              strokeWidth={2}
+                              fill="none"
+                              dot={false}
+                              activeDot={{
+                                r: 4,
+                                strokeWidth: 0,
+                                fill: ASSET_CLASS_COLORS[cls],
+                              }}
+                            />
+                          ))}
                         </>
-                      )}
-
-                      {chartMode === "GANHO" && (
+                      ) : (
                         <>
-                          <ReferenceLine
-                            y={0}
-                            stroke={refLineStroke}
-                            strokeDasharray="3 3"
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="profitLossBRL"
-                            name="Rendimento (R$)"
-                            stroke={
-                              kpis.totalProfitLossBRL >= 0
-                                ? "#10b981"
-                                : "#f43f5e"
-                            }
-                            strokeWidth={2.2}
-                            fill={
-                              kpis.totalProfitLossBRL >= 0
-                                ? "url(#evoEmeraldGrad)"
-                                : "url(#evoRoseGrad)"
-                            }
-                            dot={false}
-                            activeDot={{
-                              r: 4,
-                              strokeWidth: 0,
-                              fill:
-                                kpis.totalProfitLossBRL >= 0
-                                  ? "#10b981"
-                                  : "#f43f5e",
-                            }}
-                          />
-                        </>
-                      )}
+                          {chartMode === "PATRIMONIO" && (
+                            <>
+                              <Area
+                                type="monotone"
+                                dataKey="marketValueBRL"
+                                name="Patrimônio"
+                                stroke="#10b981"
+                                strokeWidth={2.2}
+                                fill="url(#evoEmeraldGrad)"
+                                dot={false}
+                                activeDot={{
+                                  r: 4,
+                                  strokeWidth: 0,
+                                  fill: "#10b981",
+                                }}
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="investedCostBRL"
+                                name="Aportado"
+                                stroke={isDark ? "#94a3b8" : "#64748b"}
+                                strokeWidth={1.8}
+                                strokeDasharray="5 4"
+                                fill="none"
+                                dot={false}
+                                activeDot={{
+                                  r: 4,
+                                  strokeWidth: 0,
+                                  fill: isDark ? "#94a3b8" : "#64748b",
+                                }}
+                              />
+                            </>
+                          )}
 
-                      {chartMode === "RENTABILIDADE" && (
-                        <>
-                          <ReferenceLine
-                            y={0}
-                            stroke={refLineStroke}
-                            strokeDasharray="3 3"
-                          />
-                          <Area
-                            type="monotone"
-                            dataKey="profitLossPct"
-                            name="Rentabilidade (%)"
-                            stroke="#0ea5e9"
-                            strokeWidth={2.2}
-                            fill="url(#evoBlueGrad)"
-                            dot={false}
-                            activeDot={{ r: 4, strokeWidth: 0, fill: "#0ea5e9" }}
-                          />
+                          {chartMode === "GANHO" && (
+                            <>
+                              <ReferenceLine
+                                y={0}
+                                stroke={refLineStroke}
+                                strokeDasharray="3 3"
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="profitLossBRL"
+                                name="Rendimento (R$)"
+                                stroke={
+                                  kpis.totalProfitLossBRL >= 0
+                                    ? "#10b981"
+                                    : "#f43f5e"
+                                }
+                                strokeWidth={2.2}
+                                fill={
+                                  kpis.totalProfitLossBRL >= 0
+                                    ? "url(#evoEmeraldGrad)"
+                                    : "url(#evoRoseGrad)"
+                                }
+                                dot={false}
+                                activeDot={{
+                                  r: 4,
+                                  strokeWidth: 0,
+                                  fill:
+                                    kpis.totalProfitLossBRL >= 0
+                                      ? "#10b981"
+                                      : "#f43f5e",
+                                }}
+                              />
+                            </>
+                          )}
+
+                          {chartMode === "RENTABILIDADE" && (
+                            <>
+                              <ReferenceLine
+                                y={0}
+                                stroke={refLineStroke}
+                                strokeDasharray="3 3"
+                              />
+                              <Area
+                                type="monotone"
+                                dataKey="profitLossPct"
+                                name="Rentabilidade (%)"
+                                stroke="#0ea5e9"
+                                strokeWidth={2.2}
+                                fill="url(#evoBlueGrad)"
+                                dot={false}
+                                activeDot={{
+                                  r: 4,
+                                  strokeWidth: 0,
+                                  fill: "#0ea5e9",
+                                }}
+                              />
+                            </>
+                          )}
                         </>
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
 
-                {chartMode === "PATRIMONIO" && (
-                  <div className="mt-3 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-600 dark:text-slate-400">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-0.5 w-4 rounded-full bg-emerald-500" />
-                      Patrimônio (valor de mercado)
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-500 dark:border-slate-400" />
-                      Total Aportado (custo)
-                    </span>
+                {splitByClass && activeClasses.length > 1 ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                    {activeClasses.map((cls) => (
+                      <span
+                        key={cls}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <span
+                          className="h-0.5 w-4 rounded-full"
+                          style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                        />
+                        {ASSET_CLASS_LABELS[cls]}
+                      </span>
+                    ))}
                   </div>
+                ) : (
+                  chartMode === "PATRIMONIO" && (
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-5 text-xs text-slate-600 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-0.5 w-4 rounded-full bg-emerald-500" />
+                        Patrimônio (valor de mercado)
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-0.5 w-4 border-t-2 border-dashed border-slate-500 dark:border-slate-400" />
+                        Total Aportado (custo)
+                      </span>
+                    </div>
+                  )
                 )}
               </>
             )}
