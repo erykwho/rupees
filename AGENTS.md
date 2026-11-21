@@ -50,6 +50,7 @@ Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B
 - `pnpm lint` — validação ESLint.
 - `pnpm build` — roda `prisma generate && node scripts/vercel-db-sync.mjs && next build` (validar antes de abrir PR; sincroniza o schema automaticamente no deploy de produção da Vercel quando `VERCEL_ENV=production`).
 - `pnpm db:push` — aplica alterações do schema Prisma manualmente no PostgreSQL.
+- **Autor de commits Git (obrigatório para Vercel Hobby):** antes de criar qualquer commit, garantir `git config user.name "Eryk Humberto Oliveira Alves"` e `git config user.email "erykwho@gmail.com"` para que o Vercel não bloqueie o deploy por colaborador não autorizado em repositório privado.
 - Idioma da interface e comunicação com o usuário: **Português (pt-BR)**.
 - **Roadmap V2 planejado:** Relatório anual de Imposto de Renda (aba `Informe` da planilha), controle de dividendos/proventos e gráfico histórico de evolução patrimonial.
 
