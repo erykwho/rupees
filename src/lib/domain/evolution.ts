@@ -53,6 +53,9 @@ export interface AggregatedEvolutionPoint {
   profitLossBRL: number;
   profitLossPct: number;
   usdBrl: number;
+  classMarketValue: Record<AssetClassKey, number>;
+  classProfitLoss: Record<AssetClassKey, number>;
+  classProfitLossPct: Record<AssetClassKey, number>;
 }
 
 export interface AggregatedContributionPoint {
@@ -537,25 +540,58 @@ export function aggregateEvolutionView(
     effectivePoints[effectivePoints.length - 1].date.slice(0, 4);
 
   // 1. Evolution Series (DAILY or MONTHLY)
+  const buildPoint = (
+    pt: EvolutionDayPoint,
+    label: string,
+    tooltipLabel: string
+  ): AggregatedEvolutionPoint => {
+    const sums = sumClasses(pt, activeClasses);
+    const profitLossBRL = round2(sums.marketValueBRL - sums.investedCostBRL);
+    const profitLossPct =
+      sums.investedCostBRL > EPSILON
+        ? round2((profitLossBRL / sums.investedCostBRL) * 100)
+        : 0;
+
+    const classMarketValue = {} as Record<AssetClassKey, number>;
+    const classProfitLoss = {} as Record<AssetClassKey, number>;
+    const classProfitLossPct = {} as Record<AssetClassKey, number>;
+
+    for (const cls of ALL_ASSET_CLASSES) {
+      const m = pt.byClass[cls];
+      const mv = m?.marketValueBRL ?? 0;
+      const cost = m?.investedCostBRL ?? 0;
+      const pl = round2(mv - cost);
+      classMarketValue[cls] = mv;
+      classProfitLoss[cls] = pl;
+      classProfitLossPct[cls] =
+        cost > EPSILON ? round2((pl / cost) * 100) : 0;
+    }
+
+    return {
+      date: pt.date,
+      label,
+      tooltipLabel,
+      marketValueBRL: sums.marketValueBRL,
+      investedCostBRL: sums.investedCostBRL,
+      profitLossBRL,
+      profitLossPct,
+      usdBrl: pt.usdBrl,
+      classMarketValue,
+      classProfitLoss,
+      classProfitLossPct,
+    };
+  };
+
   const evolutionSeries: AggregatedEvolutionPoint[] = [];
   if (granularity === "DAILY") {
     for (const pt of effectivePoints) {
-      const sums = sumClasses(pt, activeClasses);
-      const profitLossBRL = round2(sums.marketValueBRL - sums.investedCostBRL);
-      const profitLossPct =
-        sums.investedCostBRL > EPSILON
-          ? round2((profitLossBRL / sums.investedCostBRL) * 100)
-          : 0;
-      evolutionSeries.push({
-        date: pt.date,
-        label: formatDateAxisPTBR(pt.date, spansMultipleYears),
-        tooltipLabel: formatDateFullPTBR(pt.date),
-        marketValueBRL: sums.marketValueBRL,
-        investedCostBRL: sums.investedCostBRL,
-        profitLossBRL,
-        profitLossPct,
-        usdBrl: pt.usdBrl,
-      });
+      evolutionSeries.push(
+        buildPoint(
+          pt,
+          formatDateAxisPTBR(pt.date, spansMultipleYears),
+          formatDateFullPTBR(pt.date)
+        )
+      );
     }
   } else {
     // Group by YYYY-MM, taking the last point of each month
@@ -564,22 +600,9 @@ export function aggregateEvolutionView(
       lastByMonth.set(pt.date.slice(0, 7), pt);
     }
     for (const [ym, pt] of lastByMonth.entries()) {
-      const sums = sumClasses(pt, activeClasses);
-      const profitLossBRL = round2(sums.marketValueBRL - sums.investedCostBRL);
-      const profitLossPct =
-        sums.investedCostBRL > EPSILON
-          ? round2((profitLossBRL / sums.investedCostBRL) * 100)
-          : 0;
-      evolutionSeries.push({
-        date: pt.date,
-        label: formatMonthAxisPTBR(ym),
-        tooltipLabel: formatMonthFullPTBR(ym),
-        marketValueBRL: sums.marketValueBRL,
-        investedCostBRL: sums.investedCostBRL,
-        profitLossBRL,
-        profitLossPct,
-        usdBrl: pt.usdBrl,
-      });
+      evolutionSeries.push(
+        buildPoint(pt, formatMonthAxisPTBR(ym), formatMonthFullPTBR(ym))
+      );
     }
   }
 

@@ -270,6 +270,12 @@ describe("aggregateEvolutionView", () => {
     expect(withoutReserve.kpis.totalProfitLossPct).toBe(15);
     expect(withoutReserve.evolutionSeries.length).toBe(3); // Nov, Dec, Jan
 
+    const lastPt = withoutReserve.evolutionSeries[2];
+    expect(lastPt.classMarketValue.BR_STOCK).toBe(3600);
+    expect(lastPt.classMarketValue.FIXED_INCOME).toBe(1000);
+    expect(lastPt.classProfitLoss.BR_STOCK).toBe(600);
+    expect(lastPt.classProfitLossPct.BR_STOCK).toBe(20);
+
     const withReserve = aggregateEvolutionView(evo.points, {
       selectedClasses: [],
       includeReserve: true,
