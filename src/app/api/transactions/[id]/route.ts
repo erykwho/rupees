@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   buildTransactionEntityLabel,
@@ -173,9 +173,8 @@ export async function PATCH(
       },
     });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json(
       { error: "Erro ao atualizar lançamento" },
       { status: 500 }
@@ -230,9 +229,8 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json(
       { error: "Erro ao remover lançamento" },
       { status: 500 }

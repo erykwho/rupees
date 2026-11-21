@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { loadUserFixedIncome } from "@/lib/fixed-income-loader";
 
 export async function GET(request: Request) {
@@ -14,9 +14,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(data);
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("GET /api/fixed-income error:", err);
     return NextResponse.json(
       { error: "Erro ao carregar projeção de renda fixa" },

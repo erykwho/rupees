@@ -27,6 +27,15 @@ export const authConfig: NextAuthConfig = {
     strategy: "jwt",
   },
   callbacks: {
+    session({ session, token }) {
+      if (session.user && typeof token.userId === "string") {
+        session.user.id = token.userId;
+      }
+      if (session.user && typeof token.appLockEnabled === "boolean") {
+        session.user.appLockEnabled = token.appLockEnabled;
+      }
+      return session;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = Boolean(auth?.user?.email);
       const isLoginPage = nextUrl.pathname === "/login";

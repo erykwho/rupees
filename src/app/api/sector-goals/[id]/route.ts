@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   buildSectorGoalEntityLabel,
@@ -110,9 +110,8 @@ export async function PATCH(
       },
     });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     if (
       typeof err === "object" &&
       err !== null &&
@@ -190,9 +189,8 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("DELETE /api/sector-goals/[id] error:", err);
     return NextResponse.json(
       { error: "Erro ao excluir objetivo de setor" },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   buildTransactionEntityLabel,
@@ -69,9 +69,8 @@ export async function GET(request: Request) {
       })),
     });
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     return NextResponse.json(
       { error: "Erro ao listar lançamentos" },
       { status: 500 }
@@ -199,9 +198,8 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
-    if (err instanceof Error && err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
+    const authRes = authErrorResponse(err);
+    if (authRes) return authRes;
     console.error("POST /api/transactions error:", err);
     return NextResponse.json(
       { error: "Erro ao registrar lançamento" },
