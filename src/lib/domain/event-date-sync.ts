@@ -280,3 +280,134 @@ export function matchAuditEventsWithSheet(
     unmatchedEvents,
   };
 }
+
+export interface BootstrapEventCandidate {
+  id: string;
+  entityType: "GOAL" | "ASSET";
+  entityId: string;
+  entityLabel: string;
+  createdAt: Date;
+  /** `Asset.createdAt` atual no banco (apenas para entityType === "ASSET"). */
+  assetCreatedAt?: Date | null;
+}
+
+export interface BootstrapDateUpdate {
+  eventId: string;
+  entityType: "GOAL" | "ASSET";
+  entityId: string;
+  entityLabel: string;
+  currentEventCreatedAt: Date;
+  currentAssetCreatedAt: Date | null;
+  targetDate: Date;
+  eventNeedsUpdate: boolean;
+  assetNeedsUpdate: boolean;
+}
+
+export interface BootstrapDateSyncPlan {
+  baseDate: Date;
+  updates: BootstrapDateUpdate[];
+  skippedEvents: BootstrapEventCandidate[];
+}
+
+/**
+ * Calcula a data base para eventos iniciais (GOAL e ASSET):
+ * exatamente 1 dia antes da menor data de aporte, às 12:00:00 UTC (09:00 BRT).
+ */
+export function computePreFirstContributionBaseDate(dates: Date[]): Date | null {
+  const valid = dates.filter((d) => !Number.isNaN(d.getTime()));
+  if (valid.length === 0) return null;
+
+  let minTime = valid[0].getTime();
+  for (let i = 1; i < valid.length; i++) {
+    if (valid[i].getTime() < minTime) {
+      minTime = valid[i].getTime();
+    }
+  }
+
+  const minDate = new Date(minTime);
+  return new Date(
+    Date.UTC(
+      minDate.getUTCFullYear(),
+      minDate.getUTCMonth(),
+      minDate.getUTCDate() - 1,
+      12,
+      0,
+      0
+    )
+  );
+}
+
+/**
+ * Seleciona os eventos `CREATE` de `GOAL` e `ASSET` pertencentes ao lote inicial
+ * de importação (por padrão, todos ocorridos dentro de `batchWindowMs` — 5 min —
+ * a partir do evento mais antigo, ou anteriores a `importedBefore` se informado)
+ * e calcula as datas alvo a partir de `baseDate`:
+ * - `GOAL` recebe `baseDate` (offset 0s)
+ * - Cada `ASSET` recebe `baseDate + (index + 1) * 1s` preservando a ordem original.
+ */
+export function planBootstrapDateUpdates(params: {
+  baseDate: Date;
+  events: BootstrapEventCandidate[];
+  importedBefore?: Date;
+  batchWindowMs?: number;
+}): BootstrapDateSyncPlan {
+  const { baseDate, events, importedBefore, batchWindowMs = 5 * 60 * 1000 } = params;
+
+  const sorted = [...events].sort((a, b) => {
+    const tDiff = a.createdAt.getTime() - b.createdAt.getTime();
+    if (tDiff !== 0) return tDiff;
+    return a.id.localeCompare(b.id);
+  });
+
+  if (sorted.length === 0) {
+    return { baseDate, updates: [], skippedEvents: [] };
+  }
+
+  const cutoffMs = importedBefore
+    ? importedBefore.getTime()
+    : sorted[0].createdAt.getTime() + batchWindowMs;
+
+  const inBatch: BootstrapEventCandidate[] = [];
+  const skippedEvents: BootstrapEventCandidate[] = [];
+
+  for (const ev of sorted) {
+    if (ev.createdAt.getTime() <= cutoffMs) {
+      inBatch.push(ev);
+    } else {
+      skippedEvents.push(ev);
+    }
+  }
+
+  // GOAL primeiro (offset 0), depois ASSET na ordem original (offset 1..N)
+  const goalEvents = inBatch.filter((e) => e.entityType === "GOAL");
+  const assetEvents = inBatch.filter((e) => e.entityType === "ASSET");
+  const orderedBatch = [...goalEvents, ...assetEvents];
+
+  const updates: BootstrapDateUpdate[] = orderedBatch.map((ev, index) => {
+    const targetDate = new Date(baseDate.getTime() + index * 1000);
+    const currentAssetCreatedAt =
+      ev.entityType === "ASSET" ? (ev.assetCreatedAt ?? null) : null;
+
+    return {
+      eventId: ev.id,
+      entityType: ev.entityType,
+      entityId: ev.entityId,
+      entityLabel: ev.entityLabel,
+      currentEventCreatedAt: ev.createdAt,
+      currentAssetCreatedAt,
+      targetDate,
+      eventNeedsUpdate: ev.createdAt.getTime() !== targetDate.getTime(),
+      assetNeedsUpdate:
+        ev.entityType === "ASSET" &&
+        currentAssetCreatedAt !== null &&
+        currentAssetCreatedAt.getTime() !== targetDate.getTime(),
+    };
+  });
+
+  return {
+    baseDate,
+    updates,
+    skippedEvents,
+  };
+}
+

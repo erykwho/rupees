@@ -209,7 +209,33 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
 
     const rows: Prisma.AuditEventCreateManyInput[] = [];
 
+    const txOrderByDate = [...transactions].sort((a, b) => {
+      const dateDiff = a.date.getTime() - b.date.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      const createdDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+    const earliestTxDate = txOrderByDate[0]?.date ?? null;
+    const bootstrapBaseDate = earliestTxDate
+      ? new Date(
+          Date.UTC(
+            earliestTxDate.getUTCFullYear(),
+            earliestTxDate.getUTCMonth(),
+            earliestTxDate.getUTCDate() - 1,
+            12,
+            0,
+            0
+          )
+        )
+      : null;
+
     if (goal) {
+      const goalCreatedAt =
+        bootstrapBaseDate && goal.updatedAt > earliestTxDate!
+          ? bootstrapBaseDate
+          : goal.updatedAt;
       rows.push({
         userId,
         entityType: "GOAL",
@@ -218,11 +244,16 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
         action: "CREATE",
         beforeState: Prisma.DbNull,
         afterState: toJsonValue(toGoalSnapshot(goal)),
-        createdAt: goal.updatedAt,
+        createdAt: goalCreatedAt,
       });
     }
 
+    let bootstrapAssetOffset = 1;
     for (const asset of assets) {
+      const assetCreatedAt =
+        bootstrapBaseDate && asset.createdAt > earliestTxDate!
+          ? new Date(bootstrapBaseDate.getTime() + bootstrapAssetOffset++ * 1000)
+          : asset.createdAt;
       rows.push({
         userId,
         entityType: "ASSET",
@@ -231,17 +262,9 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
         action: "CREATE",
         beforeState: Prisma.DbNull,
         afterState: toJsonValue(toAssetSnapshot(asset)),
-        createdAt: asset.createdAt,
+        createdAt: assetCreatedAt,
       });
     }
-
-    const txOrderByDate = [...transactions].sort((a, b) => {
-      const dateDiff = a.date.getTime() - b.date.getTime();
-      if (dateDiff !== 0) return dateDiff;
-      const createdDiff = a.createdAt.getTime() - b.createdAt.getTime();
-      if (createdDiff !== 0) return createdDiff;
-      return a.id.localeCompare(b.id);
-    });
 
     const dayCounts = new Map<string, number>();
     for (const t of txOrderByDate) {

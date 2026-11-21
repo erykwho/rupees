@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type AuditEventCandidate,
+  type BootstrapEventCandidate,
+  computePreFirstContributionBaseDate,
   matchAuditEventsWithSheet,
   parseAportesCsv,
+  planBootstrapDateUpdates,
 } from "./event-date-sync";
 
 const SAMPLE_CSV = [
@@ -144,3 +147,82 @@ describe("matchAuditEventsWithSheet", () => {
     expect(plan.unmatchedEvents.map((e) => e.id)).toEqual(["ev-app-only"]);
   });
 });
+
+describe("computePreFirstContributionBaseDate", () => {
+  it("retorna 1 dia antes do primeiro aporte às 12:00 UTC", () => {
+    const base = computePreFirstContributionBaseDate([
+      new Date("2025-04-30T12:00:00.000Z"),
+      new Date("2025-02-07T12:00:00.000Z"),
+      new Date("2026-11-04T12:00:01.000Z"),
+    ]);
+    expect(base?.toISOString()).toBe("2025-02-06T12:00:00.000Z");
+  });
+
+  it("retorna null quando não há datas válidas", () => {
+    expect(computePreFirstContributionBaseDate([])).toBeNull();
+  });
+});
+
+describe("planBootstrapDateUpdates", () => {
+  it("seleciona GOAL e ASSETs do lote inicial, ignora ativos criados depois e atualiza Asset.createdAt", () => {
+    const baseDate = new Date("2025-02-06T12:00:00.000Z");
+    const events: BootstrapEventCandidate[] = [
+      {
+        id: "ev-goal",
+        entityType: "GOAL",
+        entityId: "goal-1",
+        entityLabel: "Objetivos de Alocação",
+        createdAt: new Date("2026-11-21T00:44:25.902Z"),
+      },
+      {
+        id: "ev-asset-1",
+        entityType: "ASSET",
+        entityId: "asset-1",
+        entityLabel: "IPCA",
+        createdAt: new Date("2026-11-21T00:44:26.100Z"),
+        assetCreatedAt: new Date("2026-11-21T00:44:26.100Z"),
+      },
+      {
+        id: "ev-asset-2",
+        entityType: "ASSET",
+        entityId: "asset-2",
+        entityLabel: "SELIC",
+        createdAt: new Date("2026-11-21T00:44:26.200Z"),
+        assetCreatedAt: new Date("2026-11-21T00:44:26.200Z"),
+      },
+      {
+        id: "ev-asset-manual",
+        entityType: "ASSET",
+        entityId: "asset-teste",
+        entityLabel: "TESTE",
+        createdAt: new Date("2026-11-21T13:23:45.815Z"),
+        assetCreatedAt: null,
+      },
+    ];
+
+    const plan = planBootstrapDateUpdates({ baseDate, events });
+
+    expect(plan.updates).toHaveLength(3);
+    expect(plan.updates[0]).toMatchObject({
+      eventId: "ev-goal",
+      entityType: "GOAL",
+      eventNeedsUpdate: true,
+      assetNeedsUpdate: false,
+    });
+    expect(plan.updates[0].targetDate.toISOString()).toBe("2025-02-06T12:00:00.000Z");
+
+    expect(plan.updates[1]).toMatchObject({
+      eventId: "ev-asset-1",
+      entityLabel: "IPCA",
+      eventNeedsUpdate: true,
+      assetNeedsUpdate: true,
+    });
+    expect(plan.updates[1].targetDate.toISOString()).toBe("2025-02-06T12:00:01.000Z");
+
+    expect(plan.updates[2].targetDate.toISOString()).toBe("2025-02-06T12:00:02.000Z");
+
+    // Ativo TESTE criado 13h depois fica intacto
+    expect(plan.skippedEvents.map((e) => e.entityLabel)).toEqual(["TESTE"]);
+  });
+});
+
