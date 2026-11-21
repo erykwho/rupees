@@ -235,8 +235,21 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
       });
     }
 
-    for (const t of transactions) {
+    const txOrderByDate = [...transactions].sort((a, b) => {
+      const dateDiff = a.date.getTime() - b.date.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      const createdDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+    const dayCounts = new Map<string, number>();
+    for (const t of txOrderByDate) {
       const snap = toTransactionSnapshot(t);
+      const dayKey = t.date.toISOString().slice(0, 10);
+      const offsetSeconds = dayCounts.get(dayKey) ?? 0;
+      dayCounts.set(dayKey, offsetSeconds + 1);
+
       rows.push({
         userId,
         entityType: "TRANSACTION",
@@ -245,7 +258,7 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
         action: "CREATE",
         beforeState: Prisma.DbNull,
         afterState: toJsonValue(snap),
-        createdAt: t.createdAt,
+        createdAt: new Date(t.date.getTime() + offsetSeconds * 1000),
       });
     }
 
