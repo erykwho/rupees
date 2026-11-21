@@ -1,7 +1,68 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="112" fill="#059669" />
-  <path d="M256 76L382 172V340L256 436L130 340V172L256 76Z" fill="#10B981" />
-  <path d="M256 76L382 172L256 232L130 172L256 76Z" fill="#6EE7B7" />
-  <path d="M256 232L382 172V340L256 436V232Z" fill="#047857" />
-  <path d="M256 140L322 190V322L256 372L190 322V190L256 140Z" fill="#ECFDF5" fill-opacity="0.22" />
+  <defs>
+    <clipPath id="gem-clip">
+      <path d="M 240 46 Q 256 36 272 46 L 394 120 Q 410 130 410 148 L 410 364 Q 410 382 394 392 L 272 466 Q 256 476 240 466 L 118 392 Q 102 382 102 364 L 102 148 Q 102 130 118 120 Z" />
+    </clipPath>
+    <linearGradient id="bevel-tr" x1="256" y1="36" x2="410" y2="166" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#86EFAC" />
+      <stop offset="55%" stop-color="#A7F3D0" />
+      <stop offset="100%" stop-color="#D1FAE5" />
+    </linearGradient>
+    <linearGradient id="bevel-r" x1="410" y1="130" x2="350" y2="382" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6EE7B7" />
+      <stop offset="50%" stop-color="#2DD4BF" />
+      <stop offset="100%" stop-color="#0D9488" />
+    </linearGradient>
+    <linearGradient id="bevel-br" x1="410" y1="382" x2="256" y2="476" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="bevel-bl" x1="102" y1="382" x2="256" y2="476" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#022C22" />
+      <stop offset="100%" stop-color="#064E3B" />
+    </linearGradient>
+    <linearGradient id="bevel-l" x1="102" y1="130" x2="162" y2="382" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="55%" stop-color="#047857" />
+      <stop offset="100%" stop-color="#064E3B" />
+    </linearGradient>
+    <linearGradient id="bevel-tl" x1="102" y1="130" x2="256" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="50%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <linearGradient id="table-fill" x1="162" y1="108" x2="350" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D9488" />
+      <stop offset="52%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="sheen-main" x1="170" y1="430" x2="395" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.22" />
+      <stop offset="55%" stop-color="#A7F3D0" stop-opacity="0.38" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.62" />
+    </linearGradient>
+    <linearGradient id="sheen-soft" x1="110" y1="360" x2="320" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#A7F3D0" stop-opacity="0.26" />
+    </linearGradient>
+  </defs>
+
+  <g clip-path="url(#gem-clip)">
+    <!-- 6 outer bevel facets -->
+    <polygon points="256,36 410,130 350,166 256,108" fill="url(#bevel-tr)" />
+    <polygon points="410,130 410,382 350,346 350,166" fill="url(#bevel-r)" />
+    <polygon points="410,382 256,476 256,404 350,346" fill="url(#bevel-br)" />
+    <polygon points="256,476 102,382 162,346 256,404" fill="url(#bevel-bl)" />
+    <polygon points="102,382 102,130 162,166 162,346" fill="url(#bevel-l)" />
+    <polygon points="102,130 256,36 256,108 162,166" fill="url(#bevel-tl)" />
+
+    <!-- Central table facet -->
+    <polygon points="256,108 350,166 350,346 256,404 162,346 162,166" fill="url(#table-fill)" />
+
+    <!-- Subtle diagonal upward prism bands -->
+    <polygon points="102,354 274,80 342,102 152,406" fill="url(#sheen-soft)" />
+    <polygon points="196,436 372,110 426,142 250,468" fill="url(#sheen-main)" />
+    <path d="M 192 436 L 370 112" stroke="#D1FAE5" stroke-opacity="0.55" stroke-width="3.5" />
+    <path d="M 152 308 L 260 114" stroke="#A7F3D0" stroke-opacity="0.38" stroke-width="2.5" />
+  </g>
 </svg>

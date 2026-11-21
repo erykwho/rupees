@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   LayoutDashboard,
   LogOut,
@@ -17,6 +19,7 @@ import {
 } from "lucide-react";
 import { PrivacyToggle } from "@/components/privacy-toggle";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { RupeesLogo } from "@/components/rupees-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +48,39 @@ const NAV_ITEMS = [
 ];
 
 const MOBILE_NAV_ITEMS = NAV_ITEMS.filter((item) => item.href !== "/objetivos");
+const SIDEBAR_STORAGE_KEY = "rupees-sidebar-collapsed";
+const sidebarListeners = new Set<() => void>();
+
+function emitSidebarChange() {
+  sidebarListeners.forEach((listener) => listener());
+}
+
+function getClientSidebarCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getServerSidebarCollapsed(): boolean {
+  return false;
+}
+
+function subscribeSidebar(listener: () => void) {
+  sidebarListeners.add(listener);
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === SIDEBAR_STORAGE_KEY) {
+      emitSidebarChange();
+    }
+  };
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    sidebarListeners.delete(listener);
+    window.removeEventListener("storage", handleStorage);
+  };
+}
 
 interface AppShellProps {
   user: {
@@ -58,23 +94,16 @@ interface AppShellProps {
 
 function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
   const boxClass = size === "sm" ? "h-8 w-8 rounded-lg" : "h-9 w-9 rounded-xl";
-  const svgClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  const svgClass = size === "sm" ? "h-5 w-5" : "h-6 w-6";
 
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center bg-emerald-600 shadow-sm shadow-emerald-600/20",
+        "flex shrink-0 items-center justify-center border border-slate-200/80 bg-slate-50/80 shadow-2xs dark:border-slate-800 dark:bg-slate-800/60",
         boxClass
       )}
     >
-      <svg viewBox="0 0 32 32" className={svgClass} fill="none">
-        <path
-          d="M16 4L25 10.5V21.5L16 28L7 21.5V10.5L16 4Z"
-          fill="#A7F3D0"
-        />
-        <path d="M16 4L25 10.5L16 15L7 10.5L16 4Z" fill="#ECFDF5" />
-        <path d="M16 15L25 10.5V21.5L16 28V15Z" fill="#059669" />
-      </svg>
+      <RupeesLogo className={svgClass} />
     </div>
   );
 }
@@ -82,7 +111,22 @@ function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
 export function AppShell({ user, signOutAction, children }: AppShellProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const desktopCollapsed = useSyncExternalStore(
+    subscribeSidebar,
+    getClientSidebarCollapsed,
+    getServerSidebarCollapsed
+  );
   const drawerTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function toggleDesktopSidebar() {
+    const next = !desktopCollapsed;
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+    } catch {
+      // Ignore storage failures in restricted contexts
+    }
+    emitSidebarChange();
+  }
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -142,8 +186,13 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
     window.location.reload();
   }
 
-  const renderNavLinks = (onNavigate?: () => void) =>
-    NAV_ITEMS.map((item) => {
+  const renderNavLinks = (options?: {
+    onNavigate?: () => void;
+    collapsed?: boolean;
+  }) => {
+    const collapsed = options?.collapsed ?? false;
+
+    return NAV_ITEMS.map((item) => {
       const Icon = item.icon;
       const active =
         item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -152,9 +201,12 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         <Link
           key={item.href}
           href={item.href}
-          onClick={onNavigate}
+          onClick={options?.onNavigate}
+          title={collapsed ? item.fullLabel : undefined}
+          aria-label={collapsed ? item.fullLabel : undefined}
           className={cn(
-            "flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors",
+            "flex items-center rounded-xl py-2.5 text-sm font-medium transition-colors",
+            collapsed ? "justify-center px-2" : "gap-3 px-3.5",
             active
               ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
@@ -162,31 +214,51 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
         >
           <Icon
             className={cn(
-              "h-[18px] w-[18px]",
+              "h-[18px] w-[18px] shrink-0",
               active
                 ? "text-emerald-600 dark:text-emerald-400"
                 : "text-slate-400 dark:text-slate-500"
             )}
           />
-          {item.fullLabel}
+          {!collapsed && <span className="truncate">{item.fullLabel}</span>}
         </Link>
       );
     });
+  };
+
+  const userAvatar = user.image ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={user.image}
+      alt={user.name ?? "Usuário"}
+      title={user.name ?? user.email ?? "Investidor"}
+      className="h-9 w-9 shrink-0 rounded-full border border-slate-200 object-cover dark:border-slate-700"
+    />
+  ) : (
+    <div
+      title={user.name ?? user.email ?? "Investidor"}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+    >
+      {(user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()}
+    </div>
+  );
+
+  const signOutButton = (
+    <form action={signOutAction}>
+      <button
+        type="submit"
+        title="Sair"
+        aria-label="Sair"
+        className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+      >
+        <LogOut className="h-4 w-4" />
+      </button>
+    </form>
+  );
 
   const userFooter = (
     <div className="flex items-center gap-3">
-      {user.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={user.image}
-          alt={user.name ?? "Usuário"}
-          className="h-9 w-9 rounded-full border border-slate-200 object-cover dark:border-slate-700"
-        />
-      ) : (
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-          {(user.name ?? user.email ?? "U").slice(0, 2).toUpperCase()}
-        </div>
-      )}
+      {userAvatar}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
           {user.name ?? "Investidor"}
@@ -195,50 +267,93 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
           {user.email}
         </p>
       </div>
-      <form action={signOutAction}>
-        <button
-          type="submit"
-          title="Sair"
-          aria-label="Sair"
-          className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </form>
+      {signOutButton}
     </div>
   );
 
   return (
     <div className="min-h-screen bg-[#f6f7f9] text-slate-900 dark:bg-slate-950 dark:text-slate-100 lg:flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-slate-200/80 lg:bg-white dark:lg:border-slate-800 dark:lg:bg-slate-900">
-        <div className="flex h-16 items-center justify-between gap-2 px-4">
-          <div className="flex min-w-0 items-center gap-2.5">
+      <aside
+        className={cn(
+          "hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:flex-col lg:border-r lg:border-slate-200/80 lg:bg-white lg:transition-[width] lg:duration-200 lg:ease-out dark:lg:border-slate-800 dark:lg:bg-slate-900",
+          desktopCollapsed ? "lg:w-20" : "lg:w-64"
+        )}
+      >
+        {/* Collapse / Expand Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleDesktopSidebar}
+          title={
+            desktopCollapsed ? "Expandir barra lateral" : "Recolher barra lateral"
+          }
+          aria-label={
+            desktopCollapsed ? "Expandir barra lateral" : "Recolher barra lateral"
+          }
+          aria-expanded={!desktopCollapsed}
+          className="absolute -right-3.5 top-5 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-xs transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+        >
+          {desktopCollapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </button>
+
+        <div
+          className={cn(
+            "flex h-16 items-center",
+            desktopCollapsed ? "justify-center px-3" : "justify-between gap-2 px-4"
+          )}
+        >
+          <Link
+            href="/"
+            title="Rupees — Visão Geral"
+            className="flex min-w-0 items-center gap-2.5"
+          >
             <BrandLogo />
-            <div className="min-w-0">
-              <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Rupees
-              </span>
-              <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                Controle de Investimentos
-              </p>
+            {!desktopCollapsed && (
+              <div className="min-w-0">
+                <span className="block truncate text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                  Rupees
+                </span>
+                <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Controle de Investimentos
+                </p>
+              </div>
+            )}
+          </Link>
+          {!desktopCollapsed && (
+            <div className="flex shrink-0 items-center gap-0.5">
+              <PrivacyToggle />
+              <ThemeToggle />
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <PrivacyToggle />
-            <ThemeToggle />
-          </div>
+          )}
         </div>
 
         <nav
           className="flex-1 space-y-1 px-3 py-4"
           aria-label="Navegação principal"
         >
-          {renderNavLinks()}
+          {renderNavLinks({ collapsed: desktopCollapsed })}
         </nav>
 
-        <div className="border-t border-slate-200/80 p-4 dark:border-slate-800">
-          {userFooter}
+        <div
+          className={cn(
+            "border-t border-slate-200/80 dark:border-slate-800",
+            desktopCollapsed ? "p-3" : "p-4"
+          )}
+        >
+          {desktopCollapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              <PrivacyToggle />
+              <ThemeToggle />
+              {userAvatar}
+              {signOutButton}
+            </div>
+          ) : (
+            userFooter
+          )}
         </div>
       </aside>
 
@@ -302,7 +417,7 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
             className="flex-1 space-y-1 overflow-y-auto px-3 py-4"
             aria-label="Menu lateral mobile"
           >
-            {renderNavLinks(() => setMobileMenuOpen(false))}
+            {renderNavLinks({ onNavigate: () => setMobileMenuOpen(false) })}
           </nav>
 
           <div className="px-3 pb-3">
@@ -350,7 +465,12 @@ export function AppShell({ user, signOutAction, children }: AppShellProps) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 pb-24 lg:pb-10 lg:pl-64">
+      <main
+        className={cn(
+          "flex-1 pb-24 lg:pb-10 lg:transition-[padding-left] lg:duration-200 lg:ease-out",
+          desktopCollapsed ? "lg:pl-20" : "lg:pl-64"
+        )}
+      >
         <PullToRefresh disabled={mobileMenuOpen}>
           <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
             {children}
