@@ -5,11 +5,13 @@ import { RotateCcw } from "lucide-react";
 import type { MouseHandlerDataParam } from "recharts";
 import {
   type ChartZoomWindow,
+  type TouchPanAxis,
   clampZoomWindow,
   createFullZoomWindow,
   getVisibleSliceBounds,
   isZoomedWindow,
   panZoomWindow,
+  resolveTouchPanAxis,
   zoomWindowAroundAnchor,
 } from "@/lib/domain/chart-zoom";
 import { cn } from "@/lib/utils";
@@ -106,6 +108,7 @@ export function useChartZoom<T>(
   // Keep refs in sync for native DOM event listeners without re-binding on every frame
   const windowRef = useRef<ChartZoomWindow>(effectiveWindow);
   const isZoomedRef = useRef<boolean>(isZoomed);
+  const isInteractingRef = useRef<boolean>(isInteracting);
   const totalPointsRef = useRef<number>(totalPoints);
   const resetKeyRef = useRef<string>(resetKey);
   const minPointsRef = useRef<number>(minVisiblePoints);
@@ -113,10 +116,23 @@ export function useChartZoom<T>(
   useEffect(() => {
     windowRef.current = effectiveWindow;
     isZoomedRef.current = isZoomed;
+    isInteractingRef.current = isInteracting;
     totalPointsRef.current = totalPoints;
     resetKeyRef.current = resetKey;
     minPointsRef.current = minVisiblePoints;
-  }, [effectiveWindow, isZoomed, totalPoints, resetKey, minVisiblePoints]);
+  }, [
+    effectiveWindow,
+    isZoomed,
+    isInteracting,
+    totalPoints,
+    resetKey,
+    minVisiblePoints,
+  ]);
+
+  const setInteractingSync = useCallback((next: boolean) => {
+    isInteractingRef.current = next;
+    setIsInteracting(next);
+  }, []);
 
   const commitWindow = useCallback((nextWindow: ChartZoomWindow) => {
     const count = totalPointsRef.current;
@@ -134,13 +150,13 @@ export function useChartZoom<T>(
     const full = createFullZoomWindow(totalPointsRef.current);
     windowRef.current = full;
     isZoomedRef.current = false;
-    setIsInteracting(false);
+    setInteractingSync(false);
     setZoomState({
       resetKey: resetKeyRef.current,
       totalPoints: totalPointsRef.current,
       window: full,
     });
-  }, []);
+  }, [setInteractingSync]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -219,7 +235,7 @@ export function useChartZoom<T>(
 
       if (!mouseDrag.hasDragged) {
         mouseDrag.hasDragged = true;
-        setIsInteracting(true);
+        setInteractingSync(true);
       }
 
       const { plotWidth } = getPlotMetrics();
@@ -241,7 +257,7 @@ export function useChartZoom<T>(
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
       if (wasDragging) {
-        setIsInteracting(false);
+        setInteractingSync(false);
       }
     };
 
@@ -265,7 +281,7 @@ export function useChartZoom<T>(
       }
     };
 
-    // --- Mobile touch: 2-finger pinch zoom + 1-finger horizontal pan when zoomed ---
+    // --- Mobile touch (capture phase): 2-finger pinch zoom + 1-finger horizontal pan when zoomed ---
     let pinchState: {
       startDist: number;
       startMidX: number;
@@ -277,7 +293,7 @@ export function useChartZoom<T>(
       startX: number;
       startY: number;
       startWindow: ChartZoomWindow;
-      axis: "undecided" | "horizontal" | "vertical";
+      axis: TouchPanAxis;
     } | null = null;
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -286,6 +302,7 @@ export function useChartZoom<T>(
 
       if (event.touches.length === 2) {
         if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
         singleTouchPan = null;
         const t1 = event.touches[0];
         const t2 = event.touches[1];
@@ -296,7 +313,7 @@ export function useChartZoom<T>(
           startAnchorRatio: getAnchorRatio(startMidX),
           startWindow: windowRef.current,
         };
-        setIsInteracting(true);
+        setInteractingSync(true);
         return;
       }
 
@@ -317,6 +334,7 @@ export function useChartZoom<T>(
 
       if (event.touches.length === 2 && pinchState) {
         if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
         const t1 = event.touches[0];
         const t2 = event.touches[1];
         const currentDist = Math.max(10, getTouchDistance(t1, t2));
@@ -350,18 +368,21 @@ export function useChartZoom<T>(
         const dy = touch.clientY - singleTouchPan.startY;
 
         if (singleTouchPan.axis === "undecided") {
-          if (Math.hypot(dx, dy) <= 8) return;
-          if (Math.abs(dx) >= Math.abs(dy)) {
-            singleTouchPan.axis = "horizontal";
-            setIsInteracting(true);
-          } else {
-            singleTouchPan.axis = "vertical";
+          const resolved = resolveTouchPanAxis(dx, dy);
+          if (resolved === "undecided") {
+            // Keep Recharts from scrubbing the tooltip during tiny initial jitter
+            event.stopPropagation();
             return;
+          }
+          singleTouchPan.axis = resolved;
+          if (resolved === "horizontal") {
+            setInteractingSync(true);
           }
         }
 
         if (singleTouchPan.axis === "horizontal") {
           if (event.cancelable) event.preventDefault();
+          event.stopPropagation();
           const { plotWidth } = getPlotMetrics();
           const span =
             singleTouchPan.startWindow.end - singleTouchPan.startWindow.start;
@@ -373,7 +394,11 @@ export function useChartZoom<T>(
             minPointsRef.current
           );
           commitWindow(next);
+          return;
         }
+
+        // Clearly vertical drag: allow native page scroll without scrubbing tooltip
+        event.stopPropagation();
       }
     };
 
@@ -394,30 +419,48 @@ export function useChartZoom<T>(
       if (event.touches.length === 0) {
         pinchState = null;
         singleTouchPan = null;
-        setIsInteracting(false);
+        setInteractingSync(false);
       }
     };
 
     el.addEventListener("wheel", handleWheel, { passive: false });
     el.addEventListener("mousedown", handleMouseDown);
     el.addEventListener("dblclick", handleDoubleClick);
-    el.addEventListener("touchstart", handleTouchStart, { passive: false });
-    el.addEventListener("touchmove", handleTouchMove, { passive: false });
-    el.addEventListener("touchend", handleTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+      capture: true,
+    });
+    el.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+      capture: true,
+    });
+    el.addEventListener("touchend", handleTouchEnd, {
+      passive: true,
+      capture: true,
+    });
+    el.addEventListener("touchcancel", handleTouchEnd, {
+      passive: true,
+      capture: true,
+    });
 
     return () => {
       el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("mousedown", handleMouseDown);
       el.removeEventListener("dblclick", handleDoubleClick);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("touchend", handleTouchEnd);
-      el.removeEventListener("touchcancel", handleTouchEnd);
+      el.removeEventListener("touchstart", handleTouchStart, { capture: true });
+      el.removeEventListener("touchmove", handleTouchMove, { capture: true });
+      el.removeEventListener("touchend", handleTouchEnd, { capture: true });
+      el.removeEventListener("touchcancel", handleTouchEnd, { capture: true });
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [commitWindow, plotLeftInset, plotRightInset, resetZoom]);
+  }, [
+    commitWindow,
+    plotLeftInset,
+    plotRightInset,
+    resetZoom,
+    setInteractingSync,
+  ]);
 
   const { visibleData, rangeLabel, sliceKey } = useMemo(() => {
     if (totalPoints === 0) {
@@ -456,13 +499,11 @@ export function useChartZoom<T>(
 
   const sliceKeyRef = useRef(sliceKey);
   const visibleLengthRef = useRef(visibleData.length);
-  const isInteractingRef = useRef(isInteracting);
 
   useEffect(() => {
     sliceKeyRef.current = sliceKey;
     visibleLengthRef.current = visibleData.length;
-    isInteractingRef.current = isInteracting;
-  }, [sliceKey, visibleData.length, isInteracting]);
+  }, [sliceKey, visibleData.length]);
 
   const updateActiveFromChart = useCallback((state: MouseHandlerDataParam) => {
     if (isInteractingRef.current) return;
@@ -477,6 +518,15 @@ export function useChartZoom<T>(
     }
   }, []);
 
+  const updateActiveFromTouchScrub = useCallback(
+    (state: MouseHandlerDataParam) => {
+      // When zoomed, 1-finger touch drag pans the timeline; single taps update via onClick
+      if (isZoomedRef.current) return;
+      updateActiveFromChart(state);
+    },
+    [updateActiveFromChart]
+  );
+
   const clearActiveFromChart = useCallback(() => {
     setActiveSelection(null);
   }, []);
@@ -485,11 +535,11 @@ export function useChartZoom<T>(
     () => ({
       onMouseMove: updateActiveFromChart,
       onMouseLeave: clearActiveFromChart,
-      onTouchStart: updateActiveFromChart,
-      onTouchMove: updateActiveFromChart,
+      onTouchStart: updateActiveFromTouchScrub,
+      onTouchMove: updateActiveFromTouchScrub,
       onClick: updateActiveFromChart,
     }),
-    [updateActiveFromChart, clearActiveFromChart]
+    [updateActiveFromChart, updateActiveFromTouchScrub, clearActiveFromChart]
   );
 
   const activeIndex =

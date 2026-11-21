@@ -182,3 +182,25 @@ export function getVisibleSliceBounds(
 
   return { startIndex, endIndex };
 }
+
+export type TouchPanAxis = "undecided" | "horizontal" | "vertical";
+
+/**
+ * Classifies a 1-finger touch drag on a zoomed chart.
+ * Biased toward horizontal pan so natural slightly-diagonal thumb swipes
+ * reliably pan the timeline, while clearly vertical swipes still scroll the page.
+ */
+export function resolveTouchPanAxis(dx: number, dy: number): TouchPanAxis {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  if (absX >= 4 && absX >= absY * 0.55) {
+    return "horizontal";
+  }
+
+  if (absY >= 12 && absY > absX * 1.6) {
+    return "vertical";
+  }
+
+  return "undecided";
+}

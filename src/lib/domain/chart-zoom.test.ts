@@ -5,6 +5,7 @@ import {
   getVisibleSliceBounds,
   isZoomedWindow,
   panZoomWindow,
+  resolveTouchPanAxis,
   zoomWindowAroundAnchor,
 } from "./chart-zoom";
 
@@ -97,5 +98,20 @@ describe("chart-zoom domain helpers", () => {
       startIndex: 0,
       endIndex: -1,
     });
+  });
+
+  it("classifies horizontal, diagonal-horizontal, vertical, and tiny touch movements", () => {
+    // Tiny jitter stays undecided (preserves tap)
+    expect(resolveTouchPanAxis(2, 3)).toBe("undecided");
+    expect(resolveTouchPanAxis(3, 8)).toBe("undecided");
+
+    // Horizontal and slightly diagonal thumb swipes lock to horizontal pan
+    expect(resolveTouchPanAxis(5, 0)).toBe("horizontal");
+    expect(resolveTouchPanAxis(-6, 8)).toBe("horizontal");
+    expect(resolveTouchPanAxis(10, -14)).toBe("horizontal");
+
+    // Clearly vertical swipes lock to vertical page scroll
+    expect(resolveTouchPanAxis(2, 14)).toBe("vertical");
+    expect(resolveTouchPanAxis(-5, -20)).toBe("vertical");
   });
 });
