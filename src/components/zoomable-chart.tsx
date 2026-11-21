@@ -6,12 +6,15 @@ import type { MouseHandlerDataParam } from "recharts";
 import {
   type ChartZoomWindow,
   type TouchPanAxis,
+  type TouchVelocitySample,
   clampZoomWindow,
+  computeInertiaVelocity,
   createFullZoomWindow,
   getVisibleSliceBounds,
   isZoomedWindow,
   panZoomWindow,
   resolveTouchPanAxis,
+  stepInertiaVelocity,
   zoomWindowAroundAnchor,
 } from "@/lib/domain/chart-zoom";
 import { cn } from "@/lib/utils";
@@ -109,6 +112,7 @@ export function useChartZoom<T>(
   const windowRef = useRef<ChartZoomWindow>(effectiveWindow);
   const isZoomedRef = useRef<boolean>(isZoomed);
   const isInteractingRef = useRef<boolean>(isInteracting);
+  const inertiaRafRef = useRef<number | null>(null);
   const totalPointsRef = useRef<number>(totalPoints);
   const resetKeyRef = useRef<string>(resetKey);
   const minPointsRef = useRef<number>(minVisiblePoints);
@@ -134,6 +138,13 @@ export function useChartZoom<T>(
     setIsInteracting(next);
   }, []);
 
+  const stopInertia = useCallback(() => {
+    if (inertiaRafRef.current !== null) {
+      window.cancelAnimationFrame(inertiaRafRef.current);
+      inertiaRafRef.current = null;
+    }
+  }, []);
+
   const commitWindow = useCallback((nextWindow: ChartZoomWindow) => {
     const count = totalPointsRef.current;
     const clamped = clampZoomWindow(nextWindow, count, minPointsRef.current);
@@ -147,6 +158,7 @@ export function useChartZoom<T>(
   }, []);
 
   const resetZoom = useCallback(() => {
+    stopInertia();
     const full = createFullZoomWindow(totalPointsRef.current);
     windowRef.current = full;
     isZoomedRef.current = false;
@@ -156,7 +168,7 @@ export function useChartZoom<T>(
       totalPoints: totalPointsRef.current,
       window: full,
     });
-  }, [setInteractingSync]);
+  }, [setInteractingSync, stopInertia]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -266,6 +278,7 @@ export function useChartZoom<T>(
       if (event.target instanceof Element && event.target.closest("button")) {
         return;
       }
+      stopInertia();
       mouseDrag = {
         startX: event.clientX,
         startWindow: windowRef.current,
@@ -281,7 +294,7 @@ export function useChartZoom<T>(
       }
     };
 
-    // --- Mobile touch (capture phase): 2-finger pinch zoom + 1-finger horizontal pan when zoomed ---
+    // --- Mobile touch (capture phase + active target safety net): 2-finger pinch zoom + 1-finger horizontal pan + inertia ---
     let pinchState: {
       startDist: number;
       startMidX: number;
@@ -294,15 +307,105 @@ export function useChartZoom<T>(
       startY: number;
       startWindow: ChartZoomWindow;
       axis: TouchPanAxis;
+      samples: TouchVelocitySample[];
     } | null = null;
 
+    const handledTouchEvents = new WeakSet<Event>();
+    const activeTouchTargets = new Set<EventTarget>();
+
+    const startInertia = (initialVelocityPxPerMs: number) => {
+      stopInertia();
+      let velocity = initialVelocityPxPerMs;
+      let lastTime = performance.now();
+      setInteractingSync(true);
+
+      const step = (now: number) => {
+        const dt = Math.min(48, Math.max(1, now - lastTime));
+        lastTime = now;
+
+        const count = totalPointsRef.current;
+        const current = windowRef.current;
+        const span = current.end - current.start;
+        const { plotWidth } = getPlotMetrics();
+        const dx = velocity * dt;
+        const deltaPoints = (-dx / plotWidth) * span;
+        const next = panZoomWindow(
+          current,
+          count,
+          deltaPoints,
+          minPointsRef.current
+        );
+
+        const moved = Math.abs(next.start - current.start) > 1e-5;
+        if (moved) {
+          commitWindow(next);
+        }
+
+        velocity = moved ? stepInertiaVelocity(velocity, dt) : 0;
+        if (velocity !== 0 && isZoomedRef.current) {
+          inertiaRafRef.current = window.requestAnimationFrame(step);
+        } else {
+          inertiaRafRef.current = null;
+          setInteractingSync(false);
+        }
+      };
+
+      inertiaRafRef.current = window.requestAnimationFrame(step);
+    };
+
+    const detachActiveTouchTargets = () => {
+      for (const target of activeTouchTargets) {
+        target.removeEventListener("touchmove", handleTouchMove, {
+          capture: true,
+        });
+        target.removeEventListener("touchend", handleTouchEnd, {
+          capture: true,
+        });
+        target.removeEventListener("touchcancel", handleTouchEnd, {
+          capture: true,
+        });
+      }
+      activeTouchTargets.clear();
+    };
+
+    const attachTouchTarget = (target: EventTarget | null) => {
+      if (!target || target === el || activeTouchTargets.has(target)) return;
+      activeTouchTargets.add(target);
+      target.addEventListener("touchmove", handleTouchMove, {
+        passive: false,
+        capture: true,
+      });
+      target.addEventListener("touchend", handleTouchEnd, {
+        passive: true,
+        capture: true,
+      });
+      target.addEventListener("touchcancel", handleTouchEnd, {
+        passive: true,
+        capture: true,
+      });
+    };
+
+    const recordVelocitySample = (
+      samples: TouchVelocitySample[],
+      x: number,
+      t: number
+    ) => {
+      samples.push({ x, t });
+      if (samples.length > 6) {
+        samples.shift();
+      }
+    };
+
     const handleTouchStart = (event: TouchEvent) => {
+      stopInertia();
       const count = totalPointsRef.current;
       if (count <= minPointsRef.current) return;
 
       if (event.touches.length === 2) {
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
+        attachTouchTarget(window);
+        attachTouchTarget(event.target);
         singleTouchPan = null;
         const t1 = event.touches[0];
         const t2 = event.touches[1];
@@ -318,18 +421,26 @@ export function useChartZoom<T>(
       }
 
       if (event.touches.length === 1 && isZoomedRef.current) {
+        attachTouchTarget(window);
+        attachTouchTarget(event.target);
         pinchState = null;
         const touch = event.touches[0];
+        const now = performance.now();
         singleTouchPan = {
           startX: touch.clientX,
           startY: touch.clientY,
           startWindow: windowRef.current,
           axis: "undecided",
+          samples: [{ x: touch.clientX, t: now }],
         };
       }
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
+    const handleTouchMove = (event: Event) => {
+      if (!(event instanceof TouchEvent)) return;
+      if (handledTouchEvents.has(event)) return;
+      handledTouchEvents.add(event);
+
       const count = totalPointsRef.current;
 
       if (event.touches.length === 2 && pinchState) {
@@ -366,6 +477,7 @@ export function useChartZoom<T>(
         const touch = event.touches[0];
         const dx = touch.clientX - singleTouchPan.startX;
         const dy = touch.clientY - singleTouchPan.startY;
+        const now = performance.now();
 
         if (singleTouchPan.axis === "undecided") {
           const resolved = resolveTouchPanAxis(dx, dy);
@@ -383,6 +495,7 @@ export function useChartZoom<T>(
         if (singleTouchPan.axis === "horizontal") {
           if (event.cancelable) event.preventDefault();
           event.stopPropagation();
+          recordVelocitySample(singleTouchPan.samples, touch.clientX, now);
           const { plotWidth } = getPlotMetrics();
           const span =
             singleTouchPan.startWindow.end - singleTouchPan.startWindow.start;
@@ -402,7 +515,11 @@ export function useChartZoom<T>(
       }
     };
 
-    const handleTouchEnd = (event: TouchEvent) => {
+    const handleTouchEnd = (event: Event) => {
+      if (!(event instanceof TouchEvent)) return;
+      if (handledTouchEvents.has(event)) return;
+      handledTouchEvents.add(event);
+
       if (event.touches.length === 1 && pinchState && isZoomedRef.current) {
         // Seamlessly hand off from 2-finger pinch to 1-finger pan without jumping
         pinchState = null;
@@ -412,13 +529,29 @@ export function useChartZoom<T>(
           startY: touch.clientY,
           startWindow: windowRef.current,
           axis: "horizontal",
+          samples: [{ x: touch.clientX, t: performance.now() }],
         };
         return;
       }
 
       if (event.touches.length === 0) {
+        const finishedHorizontalPan =
+          singleTouchPan?.axis === "horizontal" ? singleTouchPan : null;
         pinchState = null;
         singleTouchPan = null;
+        detachActiveTouchTargets();
+
+        if (finishedHorizontalPan && isZoomedRef.current) {
+          const releaseVelocity = computeInertiaVelocity(
+            finishedHorizontalPan.samples,
+            performance.now()
+          );
+          if (releaseVelocity !== 0) {
+            startInertia(releaseVelocity);
+            return;
+          }
+        }
+
         setInteractingSync(false);
       }
     };
@@ -444,6 +577,8 @@ export function useChartZoom<T>(
     });
 
     return () => {
+      stopInertia();
+      detachActiveTouchTargets();
       el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("mousedown", handleMouseDown);
       el.removeEventListener("dblclick", handleDoubleClick);
@@ -460,6 +595,7 @@ export function useChartZoom<T>(
     plotRightInset,
     resetZoom,
     setInteractingSync,
+    stopInertia,
   ]);
 
   const { visibleData, rangeLabel, sliceKey } = useMemo(() => {
@@ -620,7 +756,7 @@ export function ZoomableChartContainer({
         ref={containerRef}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "w-full select-none",
+          "w-full select-none [&_.recharts-surface_*]:pointer-events-none",
           isZoomed && (isInteracting ? "cursor-grabbing" : "cursor-grab"),
           className
         )}

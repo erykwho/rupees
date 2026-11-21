@@ -204,3 +204,63 @@ export function resolveTouchPanAxis(dx: number, dy: number): TouchPanAxis {
 
   return "undecided";
 }
+
+export interface TouchVelocitySample {
+  x: number;
+  t: number;
+}
+
+const MAX_INERTIA_VELOCITY_PX_PER_MS = 3.5;
+const MIN_INERTIA_START_VELOCITY_PX_PER_MS = 0.08;
+const MIN_INERTIA_STOP_VELOCITY_PX_PER_MS = 0.02;
+const VELOCITY_LOOKBACK_MS = 100;
+
+/**
+ * Computes horizontal release velocity (px/ms) from recent touch samples.
+ * Returns 0 if the user paused before lifting or moved too slowly.
+ */
+export function computeInertiaVelocity(
+  samples: readonly TouchVelocitySample[],
+  now: number
+): number {
+  if (samples.length < 2) return 0;
+
+  const recent = samples.filter((s) => now - s.t <= VELOCITY_LOOKBACK_MS);
+  if (recent.length < 2) return 0;
+
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const dt = last.t - first.t;
+  if (dt < 8) return 0;
+
+  // If the finger paused right before lifting, do not launch inertia
+  if (now - last.t > 60) return 0;
+
+  const rawVelocity = (last.x - first.x) / dt;
+  if (Math.abs(rawVelocity) < MIN_INERTIA_START_VELOCITY_PX_PER_MS) {
+    return 0;
+  }
+
+  return clamp(
+    rawVelocity,
+    -MAX_INERTIA_VELOCITY_PX_PER_MS,
+    MAX_INERTIA_VELOCITY_PX_PER_MS
+  );
+}
+
+/**
+ * Frame-rate-independent exponential friction decay for pan inertia.
+ * Returns 0 once velocity drops below the resting threshold.
+ */
+export function stepInertiaVelocity(
+  velocityPxPerMs: number,
+  dtMs: number,
+  frictionPerFrame = 0.92
+): number {
+  if (!Number.isFinite(velocityPxPerMs) || dtMs <= 0) return 0;
+  const decayed = velocityPxPerMs * Math.pow(frictionPerFrame, dtMs / 16.667);
+  if (Math.abs(decayed) < MIN_INERTIA_STOP_VELOCITY_PX_PER_MS) {
+    return 0;
+  }
+  return decayed;
+}

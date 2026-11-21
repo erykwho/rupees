@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   clampZoomWindow,
+  computeInertiaVelocity,
   createFullZoomWindow,
   getVisibleSliceBounds,
   isZoomedWindow,
   panZoomWindow,
   resolveTouchPanAxis,
+  stepInertiaVelocity,
   zoomWindowAroundAnchor,
 } from "./chart-zoom";
 
@@ -113,5 +115,64 @@ describe("chart-zoom domain helpers", () => {
     // Clearly vertical swipes lock to vertical page scroll
     expect(resolveTouchPanAxis(2, 14)).toBe("vertical");
     expect(resolveTouchPanAxis(-5, -20)).toBe("vertical");
+  });
+
+  it("computes release inertia velocity and ignores paused or slow drags", () => {
+    // Fast leftward swipe -> negative px/ms
+    const fastLeft = computeInertiaVelocity(
+      [
+        { x: 200, t: 1000 },
+        { x: 160, t: 1020 },
+        { x: 110, t: 1040 },
+      ],
+      1045
+    );
+    expect(fastLeft).toBeCloseTo(-2.25, 2);
+
+    // Extremely fast swipe gets clamped to max speed
+    expect(
+      computeInertiaVelocity(
+        [
+          { x: 0, t: 1000 },
+          { x: 500, t: 1020 },
+        ],
+        1025
+      )
+    ).toBe(3.5);
+
+    // Paused before lifting (> 60ms idle) -> 0
+    expect(
+      computeInertiaVelocity(
+        [
+          { x: 100, t: 1000 },
+          { x: 200, t: 1030 },
+        ],
+        1120
+      )
+    ).toBe(0);
+
+    // Very slow drag -> 0
+    expect(
+      computeInertiaVelocity(
+        [
+          { x: 100, t: 1000 },
+          { x: 102, t: 1050 },
+        ],
+        1055
+      )
+    ).toBe(0);
+  });
+
+  it("decays inertia velocity smoothly and stops below threshold", () => {
+    const v1 = stepInertiaVelocity(1.0, 16.667);
+    expect(v1).toBeCloseTo(0.92, 2);
+
+    // Two 8.33ms frames should equal one 16.67ms frame (refresh-rate independent)
+    const halfStep = stepInertiaVelocity(1.0, 8.3335);
+    const twoHalfSteps = stepInertiaVelocity(halfStep, 8.3335);
+    expect(twoHalfSteps).toBeCloseTo(v1, 3);
+
+    // Below stop threshold returns 0
+    expect(stepInertiaVelocity(0.015, 16.667)).toBe(0);
   });
 });
