@@ -62,6 +62,19 @@ export async function PATCH(
       );
     }
 
+    if (parsed.data.assetId && parsed.data.assetId !== existing.assetId) {
+      const targetAsset = await prisma.asset.findFirst({
+        where: { id: parsed.data.assetId, userId: user.id },
+        select: { id: true },
+      });
+      if (!targetAsset) {
+        return NextResponse.json(
+          { error: "Ativo não encontrado" },
+          { status: 404 }
+        );
+      }
+    }
+
     const nextType = parsed.data.type ?? existing.type;
     const isAdjustment = nextType === "BALANCE_ADJUSTMENT";
     const nextQty =
