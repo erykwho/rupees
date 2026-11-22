@@ -19,12 +19,13 @@ export const proxy = auth(async (req) => {
   const pathname = nextUrl.pathname;
 
   const isAuthApi = pathname.startsWith("/api/auth");
+  const isHealthApi = pathname === "/api/health";
   const isPublicAsset =
     pathname === "/manifest.webmanifest" ||
     pathname.startsWith("/icons/") ||
     pathname === "/favicon.ico";
 
-  if (isAuthApi || isPublicAsset) {
+  if (isAuthApi || isHealthApi || isPublicAsset) {
     return NextResponse.next();
   }
 
