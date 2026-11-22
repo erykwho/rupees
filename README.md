@@ -1,67 +1,71 @@
 # Rupees
 
-Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B3, EUA, Renda Fixa e Reserva de Emergência), com cotações automáticas via Yahoo Finance, login via **Google SSO** e **Plano de Aporte** inteligente.
+Mobile-first personal investment tracker (**PWA**) for Brazilian equities & REITs (B3), US stocks & REITs, Fixed Income, and Emergency Reserve — with automated Yahoo Finance quotes, **Google SSO**, optional **App Lock** (biometrics/PIN), and a smart **Contribution Planner**.
 
-## Stack
+## Tech Stack
 
-- **Framework:** Next.js (App Router, TypeScript) + Tailwind CSS + Recharts
-- **Banco de Dados:** Neon PostgreSQL + Prisma ORM
-- **Autenticação:** Auth.js v5 (Google OAuth 2.0 + allowlist de e-mails)
-- **Cotações:** `yahoo-finance2` (B3 `.SA`, EUA e `USDBRL=X`) com cache de 15 min no PostgreSQL + fallback
-- **Deploy:** Vercel (free tier)
+- **Framework:** Next.js 16 (App Router, TypeScript, Turbopack), React 19, Tailwind CSS v4, Recharts
+- **Database:** Neon PostgreSQL + Prisma ORM (versioned Prisma Migrations)
+- **Authentication & Security:** Auth.js v5 (Google OAuth 2.0 + email allowlist) + optional App Lock (6-digit PIN & WebAuthn biometrics)
+- **Market Data:** `yahoo-finance2` (B3 `.SA`, US tickers, and `USDBRL=X`) with 15-minute PostgreSQL cache and fallback
+- **Testing & CI:** Vitest (domain + API security tests), Playwright (mobile PWA E2E smoke suite), GitHub Actions
+- **Hosting:** Vercel (continuous deployment from `master`)
 
-## Configuração Local
+## Local Setup
 
-1. Instale as dependências:
+1. Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-2. Copie o arquivo de exemplo de variáveis de ambiente:
+2. Copy the environment variables template:
 
 ```bash
 cp .env.example .env
 ```
 
-3. Preencha o `.env`:
-   - `DATABASE_URL`: connection string do seu projeto gratuito no [Neon](https://neon.tech).
-   - `AUTH_SECRET`: gere com `openssl rand -base64 32`.
-   - `AUTH_GOOGLE_ID` e `AUTH_GOOGLE_SECRET`: crie um OAuth Client ID (tipo *Web application*) no [Google Cloud Console](https://console.cloud.google.com/apis/credentials) com as URIs de redirecionamento:
+3. Fill in `.env`:
+   - `DATABASE_URL`: PostgreSQL connection string from your [Neon](https://neon.tech) project.
+   - `AUTH_SECRET`: generate with `openssl rand -base64 32`.
+   - `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`: create an OAuth Client ID (*Web application*) in [Google Cloud Console](https://console.cloud.google.com/apis/credentials) with the redirect URIs:
      - Local: `http://localhost:3000/api/auth/callback/google`
-     - Produção: `https://seu-app.vercel.app/api/auth/callback/google`
-   - `ALLOWED_EMAILS`: seu e-mail Google autorizado (ex: `seu.email@gmail.com`).
+     - Production: `https://your-app.vercel.app/api/auth/callback/google`
+   - `ALLOWED_EMAILS`: comma-separated list of authorized Google account emails (e.g., `you@example.com`).
 
-4. Crie as tabelas no PostgreSQL:
-
-```bash
-pnpm db:push
-```
-
-5. (Opcional) Importe os dados da sua planilha Google Sheets (exportando as abas `Ativos` e `Aportes` como `ativos.csv` e `aportes.csv` em uma pasta):
+4. Apply Prisma migrations to PostgreSQL:
 
 ```bash
-pnpm db:import --email seu.email@gmail.com --dir ./caminho/dos/csvs
+pnpm db:migrate
 ```
 
-6. Rode em desenvolvimento:
+5. *(Optional)* Import data from exported Google Sheets CSVs (`ativos.csv` and `aportes.csv` in a local folder):
+
+```bash
+pnpm db:import --email you@example.com --dir ./path/to/csvs
+```
+
+6. Start the development server:
 
 ```bash
 pnpm dev
 ```
 
-## Deploy na Vercel
+## Deploying to Vercel
 
-1. Conecte o repositório `erykwho/rupees` na [Vercel](https://vercel.com).
-2. Configure as mesmas variáveis de ambiente do `.env` nas configurações do projeto na Vercel.
-3. No Google Cloud Console, adicione `https://<seu-dominio>.vercel.app/api/auth/callback/google` em **Authorized redirect URIs**.
-4. Após o deploy, acesse pelo celular e toque em **"Adicionar à tela inicial"** (iOS/Android) para instalar como PWA.
+1. Connect the `erykwho/rupees` repository in [Vercel](https://vercel.com).
+2. Configure the same environment variables from `.env` in your Vercel project settings.
+3. In Google Cloud Console, add `https://<your-domain>.vercel.app/api/auth/callback/google` under **Authorized redirect URIs**.
+4. Production builds automatically run `prisma migrate deploy` via `scripts/vercel-db-sync.mjs` when `VERCEL_ENV=production`.
+5. After deploying, open the app on your phone and tap **"Add to Home Screen"** (iOS/Android) to install it as a PWA.
 
-## Scripts Úteis
+## Useful Scripts
 
-- `pnpm dev` — inicia o servidor de desenvolvimento
-- `pnpm build` — gera o Prisma Client e faz o build de produção
-- `pnpm test` — executa os testes unitários do motor de cálculos
-- `pnpm lint` — valida o código com ESLint
-- `pnpm db:push` — sincroniza o schema Prisma com o banco PostgreSQL
-- `pnpm db:import` — importa dados de CSVs exportados do Google Sheets
+- `pnpm dev` — start the local development server
+- `pnpm build` — generate Prisma Client, run production DB migration sync (when `VERCEL_ENV=production`), and build Next.js
+- `pnpm test` — run unit and API security tests (Vitest)
+- `pnpm test:e2e` — run mobile PWA E2E smoke tests (Playwright, requires `pnpm build` first)
+- `pnpm lint` — run ESLint checks
+- `pnpm db:migrate` — create and apply a new Prisma migration locally
+- `pnpm db:migrate:deploy` — apply pending Prisma migrations in staging/production
+- `pnpm db:import` — import portfolio data from exported Google Sheets CSVs

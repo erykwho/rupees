@@ -1,117 +1,124 @@
-# Rupees — Contexto do Projeto, Invariantes & Instruções para Agentes
+# Rupees — Project Context, Invariants & Agent Instructions
 
-Aplicação web mobile-first (**PWA**) para controle pessoal de investimentos (B3, EUA, Renda Fixa e Reserva de Emergência), migrada da planilha Google Sheets **Rupees** — em produção com dados financeiros reais.
+Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs (B3), US stocks & REITs, Fixed Income, and Emergency Reserve — migrated from the **Rupees** Google Sheet and running in production with real financial data.
 
-## Regra de Documentação Viva (Obrigatória)
+## Mandatory Language Rule
 
-`AGENTS.md` é a **especificação viva** das invariantes de produção e regras de negócio do Rupees.
-- Sempre que uma alteração introduzir ou modificar uma **regra de negócio**, **invariante de produção**, **modelo/migração do schema Prisma**, **chave/formato de `localStorage`** ou **contrato de API**, o agente DEVE atualizar a seção correspondente deste `AGENTS.md` no **mesmo Pull Request**.
-- Mantenha este arquivo conciso, declarativo e focado na verdade atual (não como changelog verboso). Se passar de ~250 linhas, extraia especificações detalhadas de domínio para `docs/invariants.md` e referencie-as aqui.
-- Toda invariante crítica documentada aqui deve ser respaldada por verificação automatizada (teste unitário/API Vitest, validação Prisma, ESLint, Playwright E2E ou CI no GitHub Actions) sempre que viável.
+- **All documentation, commit messages, Pull Request titles/descriptions, and code comments MUST be written in English** — including `AGENTS.md`, `README.md`, `docs/*`, scripts/technical notes, commit messages, and PRs — regardless of the language used in the conversation with the user.
+- **User-facing UI copy** remains in **Brazilian Portuguese (`pt-BR`)** for now (including page labels, validation/error messages shown to the user, and Error Boundaries).
+- In conversation, reply in the language the user is speaking.
 
-## Invariantes de Produção (Nunca Quebrar)
+## Living Documentation Rule (Mandatory)
 
-1. **Isolamento Multi-Tenant Estrito & Zero IDOR:**
-   - Toda rota de API autenticada (`/api/assets/**`, `/api/transactions/**`, `/api/goals`, `/api/sector-goals/**`, `/api/portfolio`, `/api/evolution`, `/api/fixed-income`, `/api/contribution-plan`, `/api/events/**`, `/api/tickers/**`, `/api/security/**`) DEVE validar a sessão (`requireUser()` ou `requireAuthenticatedUserAllowLocked()` exclusivamente em endpoints de desbloqueio/status), retornar `401` quando não autenticado, validar payloads com Zod (`400`) e escopar **toda** leitura, atualização, exclusão e referência cruzada (ex.: `assetId` em `POST`/`PATCH /api/transactions`) por `userId`.
-   - Apenas `/api/auth/**`, `/api/health`, `/login`, `/manifest.webmanifest`, `/icons/*` e `/favicon.ico` são acessíveis sem sessão Google válida.
-2. **App Lock Fail-Closed (`src/proxy.ts` + `src/lib/auth.ts`):**
-   - Quando `appLockEnabled === true`, toda rota de página redireciona para `/unlock` e toda rota de API protegida retorna `423` (`code: "APP_LOCKED"`) sem um cookie de desbloqueio assinado e válido (`rupees_app_unlock`).
-   - Apenas `/api/security/status`, `/api/security/unlock/pin` e `/api/security/webauthn/auth/*` podem usar `requireAuthenticatedUserAllowLocked()`. Alterar PIN, alterar configurações de timeout ou gerenciar dispositivos WebAuthn exige `requireUser()` (app desbloqueado).
-   - Tentativas incorretas de PIN devem respeitar rate-limit/lockout progressivo (`429`).
-3. **Migrações Zero-Downtime (Expand-and-Contract):**
-   - Atualizações do banco de produção rodam exclusivamente via **Prisma Migrations** (`prisma migrate deploy` em `scripts/vercel-db-sync.mjs`, com baseline único `P3005` para `00000000000000_init`). **Nunca** reabilite `prisma db push` em produção.
-   - Nunca remova ou renomeie uma coluna, tabela ou valor de enum existente em um único deploy. Use sempre *expand-and-contract* (adicionar coluna nullable/default → deploy do app compatível → backfill/migrar → remover coluna legada em release posterior) para preservar rollbacks seguros na Vercel.
-4. **Integridade Financeira, Moedas e Separação da Reserva:**
-   - `EMERGENCY_RESERVE` (ex.: `SELIC`) NUNCA entra no total investido para cálculo de `% Atual`, `% Objetivo` ou rebalanceamento de classes; é exibida à parte e somada apenas no indicador **Total + Reserva**.
-   - Ativos B3, Renda Fixa e Reserva são registrados em `BRL`; ativos dos EUA (`US_STOCK`, `US_REIT`) são registrados em `USD` (preço médio em `USD`) e consolidados em `BRL` pelo câmbio `USDBRL=X`.
-   - Renda Fixa e Reserva operam com `priceMode = MANUAL` e `manualPrice = 1`; atualizações de rendimento usam `TransactionType.BALANCE_ADJUSTMENT` (que preserva sinal positivo/negativo e fixa `unitPrice = 1`).
-5. **Trilha de Auditoria Transacional (`AuditEvent`):**
-   - Toda mutação em `ASSET`, `TRANSACTION`, `GOAL` e `SECTOR_GOAL` (create, update, delete, revert) DEVE gravar o respectivo `AuditEvent` de forma atômica dentro da mesma `prisma.$transaction`.
-6. **Armazenamento Local Retrocompatível:**
-   - Leitores de `localStorage` (tema e modo privacidade) DEVEM lidar com valores ausentes, corrompidos ou de formatos antigos com defaults seguros — nunca lançar exceção no parse ou em ambientes sem `window`.
-7. **Guardrails React 19 & Next.js 16:**
-   - Usar `src/proxy.ts` (convenção do Next.js 16 no lugar de `middleware.ts`).
-   - Não chamar `setState` de forma síncrona no corpo de `useEffect`; preferir `useSyncExternalStore`, `queueMicrotask` ou callbacks assíncronos.
-   - Manter Error Boundaries amigáveis em PT-BR (`src/app/error.tsx` e `src/app/global-error.tsx`) e `/api/health` (`Cache-Control: no-store`, com `?db=1` opcional para checagem Neon).
+`AGENTS.md` is a **living specification** of Rupees' production invariants and business rules.
+- Whenever a change introduces or modifies a **business rule**, **production invariant**, **Prisma schema model/migration rule**, **`localStorage` key/format**, or **API contract**, the agent MUST update the relevant section of `AGENTS.md` in the **same Pull Request**.
+- Keep this file concise, declarative, and focused on current truth (not a verbose changelog). If it grows beyond ~250 lines, extract detailed domain specs into `docs/invariants.md` and link them here.
+- Every critical invariant documented here should also be backed by an automated check (Vitest unit/API test, Prisma validation, ESLint, Playwright E2E, or GitHub Actions CI) whenever feasible.
 
-## Regras de Negócio Essenciais
+## Production Invariants (Never Break)
 
-1. **Hierarquia de Objetivos (`AllocationGoal`, `/api/goals`):**
-   - `Renda Fixa` + `Renda Variável` = 100%
-   - Dentro de RV: `Brasil` + `EUA` = 100%
-   - Dentro de Brasil: `Ações` + `FIIs` = 100%
-   - Dentro de EUA: `Stocks` + `REITs` = 100%
-   - O `% Objetivo` de cada ativo na carteira = `% da Classe * targetPctInClass`. Ativos ativos dentro de cada classe de investimento devem somar 100% (ativos com quantidade 0 são permitidos).
-2. **Objetivos por Setor (`SectorGoal`, `/api/sector-goals`):**
-   - Aplicam-se exclusivamente às classes de Renda Variável (`BR_STOCK`, `BR_FII`, `US_STOCK`, `US_REIT`).
-   - Renomear um setor propaga o novo nome para os ativos vinculados do usuário na mesma transação.
-   - Excluir um setor com ativos vinculados DEVE ser bloqueado com `409` listando os tickers afetados.
-3. **Plano de Aporte (`computeContributionPlan`, `/api/contribution-plan`):**
-   - Prioriza classes e ativos mais defasados em relação à meta, respeitando classes/tickers ignorados e limite `maxAssets`.
-   - B3 (`BR_STOCK`, `BR_FII`): apenas quantidades inteiras (`FLOOR`).
-   - EUA (`US_STOCK`, `US_REIT`): fracionável com aporte mínimo de US\$ 5 convertidos para BRL.
-   - Renda Fixa: qualquer valor em BRL.
-4. **Validação de Tickers & Cotações (`src/lib/quotes.ts`, `src/lib/ticker-validator.ts`):**
-   - Cotações via `yahoo-finance2` cobrindo B3 (sufixo `.SA`), EUA (ticker direto) e câmbio `USDBRL=X`, com cache de 15 min em `QuoteCache` e fallback para a última cotação válida.
-   - Ativos de RV são validados no Yahoo ao criar/alterar ticker ou classe (`422 INVALID_TICKER` quando inválido; `503 YAHOO_UNAVAILABLE` quando indisponível, salvo `allowUnverifiedOnUnavailable: true` que salva como `PENDING`).
-5. **Evolução Patrimonial, Projeção RF & Projeção Longo Prazo (`src/lib/domain/evolution.ts`, `fixed-income.ts`, `long-term-projection.ts`):**
-   - Série histórica reconstrói patrimônio, capital aportado, ganho nominal e retorno ponderado com cache de cotações históricas (`HistoricalQuoteCache` / `HistoricalQuoteSync`).
-   - Projeção RF calcula rentabilidade projetada com benchmarks (CDI, Selic, IPCA, Prefixado) e incidência de IR / isenção (`taxExempt`).
-   - Projeção de longo prazo considera aportes mensais, rentabilidade real/nominal e inflação.
-6. **Segurança, App Lock & Modo Privacidade (`src/lib/domain/security.ts`, `src/lib/app-lock.ts`, `src/lib/privacy.ts`):**
-   - Autenticação via Auth.js v5 (`next-auth@beta`, JWT) com Google OAuth 2.0 + allowlist `ALLOWED_EMAILS`.
-   - Camada opcional de App Lock com PIN de 6 dígitos (hash com salt via scrypt) e biometria WebAuthn (`@simplewebauthn/server`), com janela deslizante de inatividade e bloqueio temporário após falhas consecutivas.
+1. **Strict Multi-Tenant Isolation & Zero IDOR:**
+   - Every authenticated API route (`/api/assets/**`, `/api/transactions/**`, `/api/goals`, `/api/sector-goals/**`, `/api/portfolio`, `/api/evolution`, `/api/fixed-income`, `/api/contribution-plan`, `/api/events/**`, `/api/tickers/**`, `/api/security/**`) MUST validate the session (`requireUser()` or `requireAuthenticatedUserAllowLocked()` exclusively on unlock/status endpoints), return `401` when unauthenticated, validate inputs with Zod (`400`), and scope **every** read, update, delete, and cross-entity reference (e.g., `assetId` in `POST`/`PATCH /api/transactions`) by `userId`.
+   - Only `/api/auth/**`, `/api/health`, `/login`, `/manifest.webmanifest`, `/icons/*`, and `/favicon.ico` are accessible without a valid Google session.
+2. **Fail-Closed App Lock (`src/proxy.ts` + `src/lib/auth.ts`):**
+   - When `appLockEnabled === true`, every page route redirects to `/unlock` and every protected API route returns `423` (`code: "APP_LOCKED"`) without a valid server-signed unlock cookie (`rupees_app_unlock`).
+   - Only `/api/security/status`, `/api/security/unlock/pin`, and `/api/security/webauthn/auth/*` may use `requireAuthenticatedUserAllowLocked()`. Changing the PIN, updating timeout settings, or managing WebAuthn devices requires `requireUser()` (app unlocked).
+   - Failed PIN attempts MUST enforce progressive rate-limiting/lockout (`429`).
+3. **Zero-Downtime Database Migrations (Expand-and-Contract):**
+   - Production database updates run exclusively via **Prisma Migrations** (`prisma migrate deploy` in `scripts/vercel-db-sync.mjs`, with one-time `P3005` baseline transition to `00000000000000_init`). **Never** re-enable `prisma db push` in production.
+   - Never drop or rename an existing column, table, or enum value in a single deploy. Always use *expand-and-contract* (add nullable/default column first → deploy compatible app code → backfill/migrate → remove legacy column in a subsequent release) so 1-click Vercel rollbacks remain safe.
+4. **Financial Integrity, Currencies & Emergency Reserve Separation:**
+   - `EMERGENCY_RESERVE` (e.g., `SELIC`) MUST NEVER be included in total invested capital when computing `% Current`, `% Target`, or class rebalancing; it is displayed separately and added only in the **Total + Reserve** metric.
+   - B3, Fixed Income, and Reserve assets are recorded in `BRL`; US assets (`US_STOCK`, `US_REIT`) are recorded in `USD` (average price in `USD`) and consolidated into `BRL` using the `USDBRL=X` exchange rate.
+   - Fixed Income and Reserve operate with `priceMode = MANUAL` and `manualPrice = 1`; yield updates use `TransactionType.BALANCE_ADJUSTMENT` (which preserves positive/negative signs and forces `unitPrice = 1`).
+5. **Transactional Audit Trail (`AuditEvent`):**
+   - Every mutation on `ASSET`, `TRANSACTION`, `GOAL`, and `SECTOR_GOAL` (create, update, delete, revert) MUST atomically record its corresponding `AuditEvent` inside the same `prisma.$transaction`.
+6. **Backward-Compatible Client Storage:**
+   - `localStorage` readers (theme and privacy mode) MUST gracefully handle missing, corrupted, or legacy shapes with safe defaults — never throw on parse or when `window` is undefined.
+7. **React 19 & Next.js 16 Guardrails:**
+   - Use `src/proxy.ts` (Next.js 16 convention instead of `middleware.ts`).
+   - Do not call `setState` synchronously inside a `useEffect` body; use `useSyncExternalStore`, `queueMicrotask`, or async callbacks.
+   - Keep friendly `pt-BR` Error Boundaries (`src/app/error.tsx` and `src/app/global-error.tsx`) and `/api/health` (`Cache-Control: no-store`, with optional `?db=1` Neon connectivity check).
 
-## Stack & Infraestrutura
+## Core Domain Business Rules
+
+1. **Allocation Goal Hierarchy (`AllocationGoal`, `/api/goals`):**
+   - `Fixed Income` + `Variable Income` = 100%
+   - Within Variable Income: `Brazil` + `USA` = 100%
+   - Within Brazil: `Stocks` + `FIIs` = 100%
+   - Within USA: `Stocks` + `REITs` = 100%
+   - Each asset's portfolio target `%` = `Class Target % * targetPctInClass`. Active assets within each investment class should sum to 100% (zero-quantity active assets are allowed).
+2. **Sector Goals (`SectorGoal`, `/api/sector-goals`):**
+   - Apply exclusively to Variable Income classes (`BR_STOCK`, `BR_FII`, `US_STOCK`, `US_REIT`).
+   - Renaming a sector propagates the new name to the user's linked assets in the same transaction.
+   - Deleting a sector with linked assets MUST be blocked with `409`, listing the affected tickers.
+3. **Contribution Planner (`computeContributionPlan`, `/api/contribution-plan`):**
+   - Prioritizes the most underweight classes and assets relative to targets while respecting ignored classes/tickers and `maxAssets`.
+   - B3 (`BR_STOCK`, `BR_FII`): integer share quantities only (`FLOOR`).
+   - USA (`US_STOCK`, `US_REIT`): fractional shares allowed with a minimum US\$ 5 contribution converted to BRL.
+   - Fixed Income: any BRL amount.
+4. **Ticker Validation & Market Quotes (`src/lib/quotes.ts`, `src/lib/ticker-validator.ts`):**
+   - Quotes via `yahoo-finance2` covering B3 (`.SA` suffix), US tickers, and `USDBRL=X`, with a 15-minute `QuoteCache` and fallback to the last valid quote.
+   - Variable Income assets are validated on Yahoo when creating or changing ticker/class (`422 INVALID_TICKER` when invalid; `503 YAHOO_UNAVAILABLE` when unavailable, unless `allowUnverifiedOnUnavailable: true` is passed to save as `PENDING`).
+5. **Portfolio Evolution, Fixed Income & Long-Term Projections (`src/lib/domain/evolution.ts`, `fixed-income.ts`, `long-term-projection.ts`):**
+   - Historical series reconstructs equity value, invested capital, nominal gain, and weighted return backed by `HistoricalQuoteCache` / `HistoricalQuoteSync`.
+   - Fixed Income projection computes projected yields using benchmarks (CDI, Selic, IPCA, Prefixed) and tax rules (`taxExempt` vs progressive IR).
+   - Long-term projection models monthly contributions, real/nominal returns, and inflation.
+6. **Security, App Lock & Privacy Mode (`src/lib/domain/security.ts`, `src/lib/app-lock.ts`, `src/lib/privacy.ts`):**
+   - Authentication via Auth.js v5 (`next-auth@beta`, JWT) with Google OAuth 2.0 + `ALLOWED_EMAILS` allowlist.
+   - Optional App Lock with 6-digit PIN (salted scrypt hash) and WebAuthn biometrics (`@simplewebauthn/server`), sliding inactivity window, and temporary lockout after consecutive failures.
+
+## Stack & Infrastructure
 
 - **Framework:** Next.js 16 (App Router, TypeScript, Turbopack), React 19, Tailwind CSS v4, Recharts, Lucide icons, Zod.
-- **Package Manager:** `pnpm` (v12, com `pnpm-workspace.yaml` liberando `allowBuilds` para Prisma/esbuild).
-- **Banco de Dados:** Neon PostgreSQL + Prisma v6 (`prisma/schema.prisma`, migrações versionadas em `prisma/migrations/`, sincronizadas automaticamente via `prisma migrate deploy` em `scripts/vercel-db-sync.mjs` quando `VERCEL_ENV=production`).
-- **CI/CD & Hospedagem:** GitHub Actions (`.github/workflows/ci.yml` rodando `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build` e `pnpm test:e2e`) + Vercel (`https://rupees-two.vercel.app`, deploy contínuo a partir de `master`).
+- **Package Manager:** `pnpm` (v12, with `pnpm-workspace.yaml` enabling `allowBuilds` for Prisma/esbuild).
+- **Database:** Neon PostgreSQL + Prisma v6 (`prisma/schema.prisma`, versioned `prisma/migrations/`, synced automatically via `prisma migrate deploy` in `scripts/vercel-db-sync.mjs` when `VERCEL_ENV=production`).
+- **CI/CD & Hosting:** GitHub Actions (`.github/workflows/ci.yml` running `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:e2e`) + Vercel (`https://rupees-two.vercel.app`, continuous deployment from `master`).
 
-## Estrutura Principal
+## Directory Structure
 
-- `.github/workflows/ci.yml` — Pipeline CI do GitHub Actions (Prisma validate, Vitest, ESLint, Next.js build e Playwright E2E).
-- `e2e/smoke.spec.ts` & `playwright.config.ts` — Testes E2E smoke mobile PWA (`/api/health`, redirecionamento para `/login`, APIs fail-closed `401`, persistência de tema e manifesto PWA).
-- `prisma/schema.prisma` & `prisma/migrations/` — Modelos (`User`, `AllocationGoal`, `SectorGoal`, `Asset`, `Transaction`, `QuoteCache`, `HistoricalQuoteCache`, `HistoricalQuoteSync`, `AuditEvent`, `WebAuthnCredential`, `SecurityChallenge`) e migrações SQL versionadas.
-- `prisma/import-sheets.ts`, `fix-event-dates.ts`, `cleanup-mar2025-reversals.ts` — Scripts idempotentes de importação e manutenção de dados.
-- `scripts/vercel-db-sync.mjs` — Executor production-only de `prisma migrate deploy` (com baseline único `P3005`, sem fallback para `db push`).
-- `src/lib/domain/` — Motores puros de domínio e testes Vitest (`calculations`, `evolution`, `fixed-income`, `long-term-projection`, `audit`, `security`, `ticker-validation`, `chart-zoom`, `event-date-sync`, `reversal-cleanup`, `types`).
-- `src/lib/` — Loaders e serviços (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
-- `src/app/(dashboard)/` — Páginas autenticadas: `/` (Visão Geral), `/carteira`, `/lancamentos`, `/aporte`, `/objetivos`, `/evolucao`, `/eventos`, `/seguranca`.
-- `src/app/api/` — Rotas REST protegidas + `/api/health` + suítes de testes de segurança/contrato (`routes.test.ts`, `route.test.ts`).
-- `src/app/error.tsx` & `src/app/global-error.tsx` — Error Boundaries em PT-BR.
+- `.github/workflows/ci.yml` — GitHub Actions CI pipeline (Prisma validate, Vitest, ESLint, Next.js build, and Playwright E2E).
+- `e2e/smoke.spec.ts` & `playwright.config.ts` — Mobile PWA Playwright E2E smoke tests (`/api/health`, `/login` redirects, fail-closed `401` APIs, theme persistence, and PWA manifest).
+- `prisma/schema.prisma` & `prisma/migrations/` — Data models (`User`, `AllocationGoal`, `SectorGoal`, `Asset`, `Transaction`, `QuoteCache`, `HistoricalQuoteCache`, `HistoricalQuoteSync`, `AuditEvent`, `WebAuthnCredential`, `SecurityChallenge`) and versioned SQL migrations.
+- `prisma/import-sheets.ts`, `fix-event-dates.ts`, `cleanup-mar2025-reversals.ts` — Idempotent import and data maintenance scripts.
+- `scripts/vercel-db-sync.mjs` — Production-only `prisma migrate deploy` runner (with one-time `P3005` baseline and no `db push` fallback).
+- `src/lib/domain/` — Pure domain engines and Vitest suites (`calculations`, `evolution`, `fixed-income`, `long-term-projection`, `audit`, `security`, `ticker-validation`, `chart-zoom`, `event-date-sync`, `reversal-cleanup`, `types`).
+- `src/lib/` — Loaders and services (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
+- `src/app/(dashboard)/` — Authenticated pages: `/` (Overview), `/carteira` (Portfolio), `/lancamentos` (Transactions), `/aporte` (Contribution Planner), `/objetivos` (Goals), `/evolucao` (Evolution), `/eventos` (Audit Events), `/seguranca` (Security).
+- `src/app/api/` — Protected REST routes + `/api/health` + security/contract Vitest suites (`routes.test.ts`, `route.test.ts`).
+- `src/app/error.tsx` & `src/app/global-error.tsx` — `pt-BR` Error Boundaries.
 
-## Comandos & Convenções
+## Commands & Conventions
 
-- `pnpm test` — Executa testes unitários e de segurança/contrato de APIs (Vitest). Sempre adicionar/atualizar testes ao alterar `src/lib/domain/` ou `src/app/api/`.
-- `pnpm test:e2e` — Executa testes E2E smoke mobile PWA (Playwright) contra o servidor de produção (`pnpm build` antes).
-- `pnpm lint` — Validação ESLint.
-- `pnpm build` — Roda `prisma generate && node scripts/vercel-db-sync.mjs && next build`.
-- `pnpm db:migrate` — Cria e aplica nova migração Prisma localmente (`prisma migrate dev`). Sempre commitar os arquivos gerados em `prisma/migrations/`.
-- `pnpm db:migrate:deploy` — Aplica migrações pendentes em produção/staging.
-- `pnpm db:fix-event-dates` — Script idempotente (`prisma/fix-event-dates.ts`) com `--dry-run` padrão e `--apply`, aceitando `--csv` (aba Aportes) e/ou `--bootstrap` (`GOAL` e `ASSET` iniciais).
-- **Verificação Pré-PR:** Sempre validar `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build` e `pnpm test:e2e` antes de abrir um PR.
-- **Integração com o banco Neon PostgreSQL:**
-  - Quando uma tarefa exigir consulta ou manutenção direta no banco de produção e `DATABASE_URL` não estiver configurada no ambiente, solicitar ao usuário uma **Neon API Key** (preferencialmente **Project-scoped** para o projeto `snowy-sound-74057301`) ou a `DATABASE_URL` temporária.
-  - **Sempre fornecer ao usuário o link direto para gerar a chave no Neon Console:**
-    - Chave com escopo de projeto (**recomendada**, permissão Editor restrita a um único projeto): abrir o [Neon Console](https://console.neon.tech) → selecionar a organização → **Settings > API keys > Create new > Project-scoped** (projeto `snowy-sound-74057301`).
-    - Atalho direto para chaves pessoais: `https://console.neon.tech/app/settings/api-keys` (**Account settings > API keys**).
-    - Referências oficiais do Neon: gerenciamento de chaves (`https://neon.com/docs/manage/api-keys`) e setup de agentes com Neon CLI/skills/MCP (`https://neon.com/prompts/agent-setup.md`, lembrando que `neon login` exige autenticação interativa no navegador do usuário).
-  - Projeto Neon: ID `snowy-sound-74057301` (branch primária `production`, database `neondb`, role `neondb_owner`).
-  - Com a API Key, obter a `connection_uri` pela Neon API v2 (`GET https://console.neon.tech/api/v2/projects/snowy-sound-74057301/connection_uri?branch_id=<branch_id>&database_name=neondb&role_name=neondb_owner`, listando branches em `/branches` quando necessário). Atenção: chaves com escopo de projeto retornam `404` em `GET /api/v2/projects` — acessar diretamente `/projects/snowy-sound-74057301/...`.
-  - **Segurança e operação obrigatórias:**
-    - Nunca imprimir a API Key ou a `DATABASE_URL` em logs/saídas nem salvar em arquivos versionados; passar a URI apenas via variável de ambiente em memória (ou remover qualquer temporário imediatamente após o uso).
-    - Sempre executar scripts de escrita primeiro em modo `--dry-run`, apresentar o resumo ao usuário, aplicar (`--apply`) somente após confirmação e re-validar a idempotência em seguida.
-    - Ao concluir a tarefa, lembrar o usuário de revogar/rotacionar a Neon API Key temporária enviando novamente o link do Neon Console (`https://console.neon.tech` → organização → **Settings > API keys**, ou `https://console.neon.tech/app/settings/api-keys` para chave pessoal).
-- **Autor de commits Git (obrigatório para Vercel Hobby):** antes de criar qualquer commit, garantir `git config user.name "Eryk Humberto Oliveira Alves"` e `git config user.email "erykwho@gmail.com"` para que o Vercel não bloqueie o deploy por colaborador não autorizado em repositório privado.
-- **Fluxo de Pull Request (PR):** para mudanças importantes (novas funcionalidades, alterações de regra de negócio, refatorações relevantes ou mudanças de UI), sempre trabalhar em uma branch dedicada e abrir um **Pull Request** contra `master` via `gh pr create` (validando `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build` e `pnpm test:e2e` antes), em vez de fazer push direto em `master`. Antes de fazer novos commits ou push na mesma branch durante uma conversa, sempre verificar o status do PR anterior (ex: `gh pr view --json state`); se o PR já estiver fechado (`CLOSED`) ou mergeado (`MERGED`), fazer `git fetch origin`, criar uma **nova branch** a partir de `origin/master` e abrir um **novo PR** em vez de reutilizar a branch antiga.
-- **UI Mobile-First e Densidade Vertical:** o Rupees é usado prioritariamente como PWA no celular (~360–414px de largura). Ao criar ou alterar abas, barras de filtros, controles segmentados e cabeçalhos de gráficos:
-  - Evitar que abas, filtros ou seletores quebrem em múltiplas linhas (`flex-wrap`) no mobile consumindo grande fração da tela.
-  - Preferir rótulos enxutos e claros (ex.: `Projeção RF`, `Patrimônio | Ganho (R$) | Retorno (%)`, `Dia / Mês`), layouts de linha única (`grid-cols-3` + `whitespace-nowrap`) e controles compactos no mobile (como barra única com bottom sheet para multi-seleção e `<select>` nativo para seleções simples), preservando chips expandidos em telas maiores (`sm:`/`md:`) quando fizer sentido.
-  - Priorizar que o conteúdo principal (KPIs, tabelas e gráficos) apareça logo acima da dobra no celular.
-- Idioma da interface e comunicação com o usuário: **Português (pt-BR)**.
-- **Roadmap V2 planejado:** Relatório anual de Imposto de Renda (aba `Informe` da planilha) e controle de dividendos/proventos.
+- `pnpm test` — Run unit and API security/contract tests (Vitest). Always add or update tests when changing `src/lib/domain/` or `src/app/api/`.
+- `pnpm test:e2e` — Run mobile PWA E2E smoke tests (Playwright) against the production Next.js server (`pnpm build` first).
+- `pnpm lint` — Run ESLint checks.
+- `pnpm build` — Run `prisma generate && node scripts/vercel-db-sync.mjs && next build`.
+- `pnpm db:migrate` — Create and apply a new Prisma migration locally (`prisma migrate dev`). Always commit generated files under `prisma/migrations/`.
+- `pnpm db:migrate:deploy` — Apply pending migrations in staging/production environments.
+- `pnpm db:fix-event-dates` — Idempotent script (`prisma/fix-event-dates.ts`) with `--dry-run` default and `--apply`, accepting `--csv` (Aportes tab) and/or `--bootstrap` (initial `GOAL` and `ASSET` events).
+- **Pre-PR Verification:** Always validate `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:e2e` before opening a PR.
+- **Neon PostgreSQL Direct Operations:**
+  - When a task requires direct inspection or maintenance on the production database and `DATABASE_URL` is not configured in the environment, request a **Neon API Key** (preferably **Project-scoped** for project `snowy-sound-74057301`) or a temporary `DATABASE_URL` from the user.
+  - **Always provide the direct Neon Console link to generate the key:**
+    - Project-scoped key (**recommended**, Editor permissions restricted to a single project): open [Neon Console](https://console.neon.tech) → select the organization → **Settings > API keys > Create new > Project-scoped** (project `snowy-sound-74057301`).
+    - Direct shortcut for personal keys: `https://console.neon.tech/app/settings/api-keys` (**Account settings > API keys**).
+    - Official Neon references: key management (`https://neon.com/docs/manage/api-keys`) and agent setup (`https://neon.com/prompts/agent-setup.md`; note that `neon login` requires interactive browser auth).
+  - Neon project: ID `snowy-sound-74057301` (primary branch `production`, database `neondb`, role `neondb_owner`).
+  - With the API Key, fetch `connection_uri` via Neon API v2 (`GET https://console.neon.tech/api/v2/projects/snowy-sound-74057301/connection_uri?branch_id=<branch_id>&database_name=neondb&role_name=neondb_owner`, listing branches at `/branches` if needed). Note: project-scoped keys return `404` on `GET /api/v2/projects` — call `/projects/snowy-sound-74057301/...` directly.
+  - **Mandatory security & operational rules:**
+    - Never print the API Key or `DATABASE_URL` in logs/output or save them to versioned files; pass the URI strictly via in-memory environment variables (and remove any temporary files immediately after use).
+    - Always run write scripts in `--dry-run` mode first, present the summary to the user, apply (`--apply`) only after confirmation, and re-verify idempotency afterward.
+    - When finished, remind the user to revoke/rotate the temporary Neon API Key and provide the Neon Console link again (`https://console.neon.tech` → organization → **Settings > API keys**, or `https://console.neon.tech/app/settings/api-keys` for personal keys).
+- **Git Commit Author (required for Vercel Hobby):** Before creating any commit, ensure:
+  - `git config user.name "Eryk Humberto Oliveira Alves"`
+  - `git config user.email "erykwho@gmail.com"`
+- **Pull Request Workflow:** Always work on a dedicated feature branch and open a Pull Request against `master` via `gh pr create` instead of pushing directly to `master` (validating `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:e2e` first). Before pushing new commits to an existing branch in an ongoing conversation, check the PR state (`gh pr view --json state`); if `CLOSED` or `MERGED`, run `git fetch origin`, create a **new branch** from `origin/master`, and open a **new PR**.
+- **UI Mobile-First & Vertical Density:** Rupees is used primarily as a mobile PWA (~360–414px width). When building or updating tabs, filter bars, segmented controls, and chart headers:
+  - Avoid wrapping tabs, filters, or selectors onto multiple lines (`flex-wrap`) on mobile.
+  - Prefer concise labels (e.g., `Projeção RF`, `Patrimônio | Ganho (R$) | Retorno (%)`, `Dia / Mês`), single-row layouts (`grid-cols-3` + `whitespace-nowrap`), and compact mobile controls (single-row bar + bottom sheet for multi-select, native `<select>` for single-select), keeping expanded chips on larger screens (`sm:`/`md:`) where appropriate.
+  - Prioritize keeping primary content (KPIs, tables, and charts) comfortably above the fold on mobile.
+- **Planned V2 Roadmap:** Annual Brazilian Income Tax report (`Informe` tab from the spreadsheet) and dividends/distributions tracking.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
