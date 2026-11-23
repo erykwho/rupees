@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -53,8 +55,6 @@ import {
 } from "@/lib/domain/evolution";
 import type { FixedIncomeInitialData } from "@/lib/fixed-income-loader";
 import { CompactKpiStrip } from "@/components/compact-kpi-strip";
-import { FixedIncomeProjectionView } from "@/components/fixed-income-projection-view";
-import { LongTermProjectionView } from "@/components/long-term-projection-view";
 import { usePrivacy } from "@/components/privacy-provider";
 import { useTheme } from "@/components/theme-provider";
 import {
@@ -63,6 +63,36 @@ import {
 } from "@/components/zoomable-chart";
 import { MASKED_COMPACT, maskBRL, maskSignedBRL } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
+
+const TabLoadingFallback = () => (
+  <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-20 animate-pulse rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900"
+        />
+      ))}
+    </div>
+    <div className="h-72 animate-pulse rounded-2xl border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900" />
+  </div>
+);
+
+const FixedIncomeProjectionView = dynamic(
+  () =>
+    import("@/components/fixed-income-projection-view").then(
+      (mod) => mod.FixedIncomeProjectionView
+    ),
+  { loading: TabLoadingFallback }
+);
+
+const LongTermProjectionView = dynamic(
+  () =>
+    import("@/components/long-term-projection-view").then(
+      (mod) => mod.LongTermProjectionView
+    ),
+  { loading: TabLoadingFallback }
+);
 
 const getEvolutionRangeLabel = (pt: AggregatedEvolutionPoint) => pt.tooltipLabel;
 const getContributionRangeLabel = (pt: AggregatedContributionPoint) =>
@@ -473,6 +503,7 @@ export function EvolutionView({
   initialData,
   initialFixedIncome,
 }: EvolutionViewProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
@@ -557,6 +588,7 @@ export function EvolutionView({
         if (json.evolution) {
           setData(json.evolution);
         }
+        router.refresh();
       }
     } finally {
       setRefreshing(false);

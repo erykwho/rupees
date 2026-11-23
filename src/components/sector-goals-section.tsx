@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Check,
@@ -30,6 +31,7 @@ interface SectorGoalsSectionProps {
 export function SectorGoalsSection({
   initialSummary,
 }: SectorGoalsSectionProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
@@ -57,6 +59,7 @@ export function SectorGoalsSection({
       const data = await res.json();
       setSummary(data.summary);
     }
+    router.refresh();
   }
 
   const classSectors = useMemo(() => {

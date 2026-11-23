@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   Calendar,
@@ -224,6 +225,7 @@ interface FixedIncomeProjectionViewProps {
 export function FixedIncomeProjectionView({
   initialData,
 }: FixedIncomeProjectionViewProps) {
+  const router = useRouter();
   const { isPrivate } = usePrivacy();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -359,6 +361,7 @@ export function FixedIncomeProjectionView({
           setCdiInput(String(next.benchmarks.cdi));
           setIpcaInput(String(next.benchmarks.ipca));
         }
+        router.refresh();
       }
     } finally {
       if (forceRefresh) setRefreshingBcb(false);

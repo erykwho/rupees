@@ -199,6 +199,7 @@ model AuditEvent {
 
   @@index([userId, createdAt])
   @@index([userId, entityType, entityId, createdAt])
+  @@index([revertsEventId])
 }
 
 model WebAuthnCredential {

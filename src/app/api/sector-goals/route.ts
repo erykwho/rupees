@@ -9,6 +9,7 @@ import {
   recordAuditEvent,
   toSectorGoalSnapshot,
 } from "@/lib/audit-service";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 import type { VariableIncomeClassKey } from "@/lib/domain/types";
 
 const createSectorGoalSchema = z.object({
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
       return sg;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json(
       {
         sectorGoal: {

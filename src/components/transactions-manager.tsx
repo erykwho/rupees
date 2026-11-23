@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -26,6 +27,8 @@ import {
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskCurrency, maskQty } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
+
+const INITIAL_VISIBLE_COUNT = 50;
 
 export interface TransactionRow {
   id: string;
@@ -80,6 +83,7 @@ export function TransactionsManager({
   assets,
   openNewByDefault = false,
 }: TransactionsManagerProps) {
+  const router = useRouter();
   const { isPrivate } = usePrivacy();
   const [transactions, setTransactions] =
     useState<TransactionRow[]>(initialTransactions);
@@ -87,6 +91,7 @@ export function TransactionsManager({
   const [typeFilter, setTypeFilter] = useState<TransactionTypeKey | "ALL">(
     "ALL"
   );
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(
@@ -147,12 +152,22 @@ export function TransactionsManager({
     });
   }, [transactions, query, typeFilter]);
 
+  const visibleTransactions = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount]
+  );
+  const remainingCount = Math.max(
+    0,
+    filtered.length - visibleTransactions.length
+  );
+
   async function reloadTransactions() {
     const res = await fetch("/api/transactions");
     if (res.ok) {
       const data = await res.json();
       setTransactions(data.transactions);
     }
+    router.refresh();
   }
 
   function openCreateModal() {
@@ -311,7 +326,10 @@ export function TransactionsManager({
             <button
               key={key}
               type="button"
-              onClick={() => setTypeFilter(key)}
+              onClick={() => {
+                setTypeFilter(key);
+                setVisibleCount(INITIAL_VISIBLE_COUNT);
+              }}
               className={cn(
                 "whitespace-nowrap rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition-colors sm:px-3",
                 typeFilter === key
@@ -329,7 +347,10 @@ export function TransactionsManager({
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setVisibleCount(INITIAL_VISIBLE_COUNT);
+            }}
             placeholder="Buscar ticker ou nota..."
             className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
@@ -349,7 +370,7 @@ export function TransactionsManager({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.length === 0 ? (
+              {visibleTransactions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={3}
@@ -359,7 +380,7 @@ export function TransactionsManager({
                   </td>
                 </tr>
               ) : (
-                filtered.map((tx) => {
+                visibleTransactions.map((tx) => {
                   const isExpanded = expandedTxId === tx.id;
                   const toggleExpanded = () =>
                     setExpandedTxId((prev) => (prev === tx.id ? null : tx.id));
@@ -539,7 +560,7 @@ export function TransactionsManager({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filtered.length === 0 ? (
+              {visibleTransactions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -549,7 +570,7 @@ export function TransactionsManager({
                   </td>
                 </tr>
               ) : (
-                filtered.map((tx) => {
+                visibleTransactions.map((tx) => {
                   const isFixedOrAdjustment =
                     isFixedIncomeClass(tx.asset.assetClass) ||
                     tx.type === "BALANCE_ADJUSTMENT";
@@ -646,6 +667,24 @@ export function TransactionsManager({
             </tbody>
           </table>
         </div>
+
+        {remainingCount > 0 && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            <span className="tabular-nums">
+              Exibindo {visibleTransactions.length} de {filtered.length}{" "}
+              lançamentos
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleCount((prev) => prev + INITIAL_VISIBLE_COUNT)
+              }
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Mostrar mais ({Math.min(INITIAL_VISIBLE_COUNT, remainingCount)})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Create / Edit Transaction Modal */}

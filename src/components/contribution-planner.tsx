@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Check,
   CheckCircle2,
@@ -30,6 +31,7 @@ interface ContributionPlannerProps {
 export function ContributionPlanner({
   initialSummary,
 }: ContributionPlannerProps) {
+  const router = useRouter();
   const { isPrivate } = usePrivacy();
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -92,6 +94,7 @@ export function ContributionPlanner({
           const data = await portRes.json();
           setSummary(data.summary);
         }
+        router.refresh();
       }
     } finally {
       setRecordingId(null);

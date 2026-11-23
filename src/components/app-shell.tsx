@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
@@ -99,6 +99,32 @@ interface AppShellProps {
   appLockEnabled?: boolean;
   signOutAction: () => Promise<void>;
   children: React.ReactNode;
+}
+
+function NavPendingDot() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 transition-opacity duration-150",
+        pending ? "animate-pulse opacity-100 delay-100" : "opacity-0"
+      )}
+    />
+  );
+}
+
+function MobileNavPendingBar() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute inset-x-3 top-0 h-0.5 rounded-full bg-emerald-500 transition-opacity duration-150",
+        pending ? "animate-pulse opacity-100 delay-100" : "opacity-0"
+      )}
+    />
+  );
 }
 
 function BrandLogo({ size = "md" }: { size?: "sm" | "md" }) {
@@ -234,6 +260,7 @@ export function AppShell({
   const renderNavLinks = (options?: {
     onNavigate?: () => void;
     collapsed?: boolean;
+    prefetch?: boolean;
   }) => {
     const collapsed = options?.collapsed ?? false;
 
@@ -246,6 +273,7 @@ export function AppShell({
         <Link
           key={item.href}
           href={item.href}
+          prefetch={options?.prefetch}
           onClick={options?.onNavigate}
           title={collapsed ? item.fullLabel : undefined}
           aria-label={collapsed ? item.fullLabel : undefined}
@@ -265,7 +293,12 @@ export function AppShell({
                 : "text-slate-400 dark:text-slate-500"
             )}
           />
-          {!collapsed && <span className="truncate">{item.fullLabel}</span>}
+          {!collapsed && (
+            <>
+              <span className="truncate">{item.fullLabel}</span>
+              <NavPendingDot />
+            </>
+          )}
         </Link>
       );
     });
@@ -452,7 +485,10 @@ export function AppShell({
             className="flex-1 space-y-1 overflow-y-auto px-3 py-4"
             aria-label="Menu lateral mobile"
           >
-            {renderNavLinks({ onNavigate: () => setMobileMenuOpen(false) })}
+            {renderNavLinks({
+              onNavigate: () => setMobileMenuOpen(false),
+              prefetch: mobileMenuOpen ? undefined : false,
+            })}
           </nav>
 
           <div className="pb-safe border-t border-slate-200/80 px-4 pt-4 dark:border-slate-800">
@@ -519,12 +555,13 @@ export function AppShell({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
+                  "relative flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors",
                   active
                     ? "text-emerald-700 dark:text-emerald-400"
                     : "text-slate-500 dark:text-slate-400"
                 )}
               >
+                <MobileNavPendingBar />
                 <Icon
                   className={cn(
                     "h-5 w-5",

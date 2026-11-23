@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Layers, Save, Target } from "lucide-react";
 import {
   computeDerivedClassTargets,
@@ -74,6 +75,7 @@ const PAIRS: PairConfig[] = [
 ];
 
 export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [activeTab, setActiveTab] = useState<"CLASSES" | "SETORES">("CLASSES");
@@ -148,6 +150,7 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
       }
 
       setSaved(true);
+      router.refresh();
     } finally {
       setSaving(false);
     }

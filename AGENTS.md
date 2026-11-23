@@ -39,6 +39,9 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
    - Use `src/proxy.ts` (Next.js 16 convention instead of `middleware.ts`).
    - Do not call `setState` synchronously inside a `useEffect` body; use `useSyncExternalStore`, `queueMicrotask`, or async callbacks.
    - Keep friendly `pt-BR` Error Boundaries (`src/app/error.tsx` and `src/app/global-error.tsx`) and `/api/health` (`Cache-Control: no-store`, with optional `?db=1` Neon connectivity check).
+8. **Per-User Caching & Read-Your-Own-Writes Consistency (`src/lib/server-cache.ts`, `next.config.ts`):**
+   - Server-side financial snapshots (`loadCachedUserPortfolio`, `loadCachedUserEvolutionPageData`) MUST scope cache keys and tags strictly by `userId` (`portfolio:<userId>`, `evolution:<userId>`, `fixed-income:<userId>`, 60s TTL) and NEVER leak data across tenants.
+   - Every mutation Route Handler (`POST`/`PATCH`/`PUT`/`DELETE` on assets, transactions, goals, sector-goals, and event revert) and explicit `?refresh=1` refresh MUST call `invalidateUserFinancialCaches(userId)` (`revalidateTag(tag, { expire: 0 })`), and mutating client components MUST call `router.refresh()` to clear the 30s dynamic Client Router Cache (`experimental.staleTimes.dynamic: 30`, strictly shorter than the 5-minute minimum App Lock timeout).
 
 ## Core Domain Business Rules
 
@@ -57,8 +60,9 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
    - B3 (`BR_STOCK`, `BR_FII`): integer share quantities only (`FLOOR`).
    - USA (`US_STOCK`, `US_REIT`): fractional shares allowed with a minimum US\$ 5 contribution converted to BRL.
    - Fixed Income: any BRL amount.
-4. **Ticker Validation & Market Quotes (`src/lib/quotes.ts`, `src/lib/ticker-validator.ts`):**
+4. **Ticker Validation & Market Quotes (`src/lib/quotes.ts`, `src/lib/ticker-validator.ts`, `src/lib/fixed-income-rates.ts`):**
    - Quotes via `yahoo-finance2` covering B3 (`.SA` suffix), US tickers, and `USDBRL=X`, with a 15-minute `QuoteCache` and fallback to the last valid quote.
+   - Normal page navigation uses **Stale-While-Revalidate (SWR)** via Next.js `after()` (`src/lib/background-work.ts`) for expired `QuoteCache` entries, `PENDING`/`INVALID` rechecks, BCB SGS benchmarks/history, and incremental Yahoo historical charts (with a 6-hour sync cooldown on `HistoricalQuoteSync.updatedAt`); only cold misses (no cached row) or explicit `?refresh=1` / `?refresh=true` requests fetch synchronously.
    - Variable Income assets are validated on Yahoo when creating or changing ticker/class (`422 INVALID_TICKER` when invalid; `503 YAHOO_UNAVAILABLE` when unavailable, unless `allowUnverifiedOnUnavailable: true` is passed to save as `PENDING`).
 5. **Portfolio Evolution, Fixed Income & Long-Term Projections (`src/lib/domain/evolution.ts`, `fixed-income.ts`, `long-term-projection.ts`):**
    - Historical series reconstructs equity value, invested capital, nominal gain, and weighted return backed by `HistoricalQuoteCache` / `HistoricalQuoteSync`.
@@ -83,8 +87,8 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
 - `prisma/import-sheets.ts`, `fix-event-dates.ts`, `cleanup-mar2025-reversals.ts` — Idempotent import and data maintenance scripts.
 - `scripts/vercel-db-sync.mjs` — Production-only `prisma migrate deploy` runner (with one-time `P3005` baseline and no `db push` fallback).
 - `src/lib/domain/` — Pure domain engines and Vitest suites (`calculations`, `evolution`, `fixed-income`, `long-term-projection`, `audit`, `security`, `ticker-validation`, `chart-zoom`, `event-date-sync`, `reversal-cleanup`, `types`).
-- `src/lib/` — Loaders and services (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
-- `src/app/(dashboard)/` — Authenticated pages: `/` (Overview), `/carteira` (Portfolio), `/lancamentos` (Transactions), `/aporte` (Contribution Planner), `/objetivos` (Goals), `/evolucao` (Evolution), `/eventos` (Audit Events), `/seguranca` (Security).
+- `src/lib/` — Loaders and services (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `server-cache`, `background-work`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
+- `src/app/(dashboard)/` — Authenticated pages + `loading.tsx` skeletons: `/` (Overview), `/carteira` (Portfolio), `/lancamentos` (Transactions), `/aporte` (Contribution Planner), `/objetivos` (Goals), `/evolucao` (Evolution), `/eventos` (Audit Events), `/seguranca` (Security).
 - `src/app/api/` — Protected REST routes + `/api/health` + security/contract Vitest suites (`routes.test.ts`, `route.test.ts`).
 - `src/app/error.tsx` & `src/app/global-error.tsx` — `pt-BR` Error Boundaries.
 
