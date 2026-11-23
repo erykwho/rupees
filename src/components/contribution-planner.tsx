@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import {
   Check,
   CheckCircle2,
   Compass,
-  Layers,
   PlusCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import {
@@ -18,7 +17,6 @@ import {
   type InvestmentClassKey,
   type PortfolioSummary,
   formatBRL,
-  formatPct,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
 import { maskBRL, maskQty, maskUSD } from "@/lib/privacy";
@@ -38,6 +36,7 @@ export function ContributionPlanner({
   const [ignoredClasses, setIgnoredClasses] = useState<InvestmentClassKey[]>(
     []
   );
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [recordedIds, setRecordedIds] = useState<string[]>([]);
 
@@ -52,9 +51,7 @@ export function ContributionPlanner({
     });
   }, [summary, amountBRL, maxAssets, ignoredClasses]);
 
-  const uncoveredSectors = useMemo(() => {
-    return summary.sectors.filter((s) => s.status === "UNCOVERED");
-  }, [summary.sectors]);
+  const hasCustomOptions = maxAssets !== 3 || ignoredClasses.length > 0;
 
   function toggleIgnoreClass(cls: InvestmentClassKey) {
     setIgnoredClasses((prev) =>
@@ -99,64 +96,26 @@ export function ContributionPlanner({
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
           Plano de Aporte
         </h1>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Sugestão automática dos ativos mais distantes do objetivo, respeitando
-          lotes inteiros na B3 e frações (mín. US$ 5) nos EUA.
-        </p>
       </div>
 
-      {uncoveredSectors.length > 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <div>
-                <p className="font-semibold">
-                  {uncoveredSectors.length} setor
-                  {uncoveredSectors.length === 1 ? "" : "es"} com meta definida
-                  ainda não possuem ativos cadastrados
-                </p>
-                <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
-                  O plano abaixo sugere apenas ativos já cadastrados na carteira.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {uncoveredSectors.map((s) => (
-                    <span
-                      key={`${s.assetClass}::${s.sector}`}
-                      className="rounded-lg bg-white/85 px-2.5 py-1 font-medium text-amber-900 dark:bg-slate-900/80 dark:text-amber-200"
-                    >
-                      {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}{" "}
-                      <span className="font-mono text-amber-700 dark:text-amber-400">
-                        (alvo {formatPct(s.goalTargetPct ?? 0, 1)})
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <Link
-              href="/carteira"
-              className="shrink-0 font-semibold text-amber-800 hover:underline dark:text-amber-300"
+      {/* Prominent Amount Input + Collapsible Options */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-end gap-2.5">
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="contribution-amount"
+              className="mb-1 block text-xs font-semibold text-slate-500 dark:text-slate-400"
             >
-              Cadastrar na Carteira →
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* Controls */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Quanto você quer investir (R$)
+              Valor do aporte (R$)
             </label>
             <input
+              id="contribution-amount"
               type="number"
               min="0"
               step="50"
@@ -165,98 +124,120 @@ export function ContributionPlanner({
                 setAmountInput(e.target.value);
                 setRecordedIds([]);
               }}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-lg font-bold text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2 font-mono text-lg font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Quantidade máxima de ativos ({maxAssets})
-            </label>
-            <div className="flex items-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={() => setOptionsOpen((prev) => !prev)}
+            aria-expanded={optionsOpen}
+            className={cn(
+              "inline-flex h-[46px] shrink-0 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors",
+              optionsOpen || hasCustomOptions
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/60 dark:text-emerald-300"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            <span>Opções</span>
+            {hasCustomOptions && (
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
+            )}
+          </button>
+        </div>
+
+        {/* Collapsible Options Panel */}
+        {optionsOpen && (
+          <div className="mt-4 space-y-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  Máximo de ativos
+                </span>
+                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                  {maxAssets}
+                </span>
+              </div>
               <input
                 type="range"
                 min={1}
                 max={10}
                 value={maxAssets}
                 onChange={(e) => setMaxAssets(Number(e.target.value))}
-                className="h-2 flex-1 cursor-pointer accent-emerald-600"
+                aria-label="Quantidade máxima de ativos"
+                className="h-2 w-full cursor-pointer accent-emerald-600"
               />
-              <span className="w-10 rounded-lg bg-slate-100 py-1 text-center font-mono text-sm font-bold text-slate-900 dark:bg-slate-800 dark:text-slate-100">
-                {maxAssets}
-              </span>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Ignorar classes
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {INVESTMENT_CLASSES.map((cls) => {
+                  const ignored = ignoredClasses.includes(cls);
+                  return (
+                    <button
+                      key={cls}
+                      type="button"
+                      onClick={() => toggleIgnoreClass(cls)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors",
+                        ignored
+                          ? "border-rose-200 bg-rose-50 text-rose-700 line-through dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                      )}
+                    >
+                      {ASSET_CLASS_LABELS[cls]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-          <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            Ignorar classes neste aporte (opcional):
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {INVESTMENT_CLASSES.map((cls) => {
-              const ignored = ignoredClasses.includes(cls);
-              return (
-                <button
-                  key={cls}
-                  type="button"
-                  onClick={() => toggleIgnoreClass(cls)}
-                  className={cn(
-                    "rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
-                    ignored
-                      ? "border-rose-200 bg-rose-50 text-rose-700 line-through dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  )}
-                >
-                  {ASSET_CLASS_LABELS[cls]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </section>
 
-      {/* Summary Strip */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Total Alocado
+      {/* Compact 2-Column Summary Strip */}
+      <div className="grid grid-cols-2 divide-x divide-slate-200/70 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-2xs dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+        <div className="px-4 py-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            Alocado
           </p>
-          <p className="mt-1 font-mono text-xl font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
+          <p className="mt-0.5 font-mono text-base font-bold text-emerald-700 tabular-nums sm:text-lg dark:text-emerald-400">
             {maskBRL(plan.totalAllocatedBRL, isPrivate)}
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Sobra não alocada
+        <div className="px-4 py-2.5">
+          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            Sobra
           </p>
-          <p className="mt-1 font-mono text-xl font-bold text-slate-700 tabular-nums dark:text-slate-200">
+          <p className="mt-0.5 font-mono text-base font-bold text-slate-700 tabular-nums sm:text-lg dark:text-slate-200">
             {maskBRL(plan.remainingBRL, isPrivate)}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Câmbio usado
-          </p>
-          <p className="mt-1 font-mono text-xl font-bold text-slate-900 tabular-nums dark:text-slate-100">
-            {formatBRL(plan.usdBrl)}
           </p>
         </div>
       </div>
 
       {/* Suggestions */}
       <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <Compass className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            Sugestão de Compras
-          </h2>
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3.5 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <Compass className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              Sugestão de Compras
+            </h2>
+          </div>
+          <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">
+            {maxAssets} {maxAssets === 1 ? "ativo" : "ativos"}
+            {ignoredClasses.length > 0 &&
+              ` · -${ignoredClasses.length} ${ignoredClasses.length === 1 ? "classe" : "classes"}`}
+          </span>
         </div>
 
         {plan.suggestions.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-400 dark:text-slate-500">
-            Informe um valor para calcular as sugestões de aporte ou verifique se
-            há ativos ativos com objetivos definidos.
+          <div className="px-4 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
+            Informe um valor para calcular as sugestões.
           </div>
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -266,76 +247,72 @@ export function ContributionPlanner({
               return (
                 <div
                   key={s.assetId}
-                  className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex items-center justify-between gap-3 px-4 py-3.5"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
                         {s.ticker}
                       </span>
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{
+                            backgroundColor: ASSET_CLASS_COLORS[s.assetClass],
+                          }}
+                        />
                         {ASSET_CLASS_LABELS[s.assetClass]}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      Falta para meta:{" "}
-                      <span className="font-mono font-semibold text-slate-700 tabular-nums dark:text-slate-200">
-                        {maskBRL(s.neededBRL, isPrivate)}
-                      </span>{" "}
-                      · Cotação:{" "}
-                      <span className="font-mono tabular-nums">
-                        {formatBRL(s.unitPriceBRL)}
-                      </span>
+                    <p className="mt-0.5 font-mono text-[11px] text-slate-500 tabular-nums dark:text-slate-400">
+                      {maskQty(s.suggestedQty, isPrivate, s.assetClass)}{" "}
+                      {s.assetClass === "FIXED_INCOME" ? "reais" : "unid."}
+                      {s.assetClass !== "FIXED_INCOME" &&
+                        ` · ${formatBRL(s.unitPriceBRL)}`}
+                      {s.currency === "USD" && (
+                        <span className="ml-1 text-slate-400 dark:text-slate-500">
+                          ({maskUSD(s.investUSD, isPrivate)})
+                        </span>
+                      )}
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
-                    <div className="text-left sm:text-right">
-                      <p className="font-mono text-base font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
-                        {maskBRL(s.investBRL, isPrivate)}
-                      </p>
-                      <p className="font-mono text-xs text-slate-500 tabular-nums dark:text-slate-400">
-                        {maskQty(s.suggestedQty, isPrivate, s.assetClass)}{" "}
-                        {s.assetClass === "FIXED_INCOME" ? "reais" : "unid."}
-                        {s.currency === "USD" && (
-                          <span className="ml-1.5 text-slate-400 dark:text-slate-500">
-                            ({maskUSD(s.investUSD, isPrivate)})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-
-                    {s.investBRL > 0 && (
-                      <button
-                        type="button"
-                        disabled={isRecording || isRecorded}
-                        onClick={() => handleRecordContribution(s)}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors",
-                          isRecorded
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                            : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-                        )}
-                      >
-                        {isRecorded ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4" />
-                            Registrado
-                          </>
-                        ) : isRecording ? (
-                          "Salvando..."
-                        ) : (
-                          <>
-                            <PlusCircle className="h-4 w-4" />
-                            Registrar compra
-                          </>
-                        )}
-                      </button>
-                    )}
-                    {s.investBRL === 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        <Check className="h-3.5 w-3.5" />
-                        Saldo insuficiente p/ 1 cota
+                  <div className="flex shrink-0 items-center gap-2.5">
+                    {s.investBRL > 0 ? (
+                      <>
+                        <span className="font-mono text-sm font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
+                          {maskBRL(s.investBRL, isPrivate)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isRecording || isRecorded}
+                          onClick={() => handleRecordContribution(s)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
+                            isRecorded
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                          )}
+                        >
+                          {isRecorded ? (
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              OK
+                            </>
+                          ) : isRecording ? (
+                            "..."
+                          ) : (
+                            <>
+                              <PlusCircle className="h-3.5 w-3.5" />
+                              Registrar
+                            </>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        <Check className="h-3 w-3" />
+                        &lt; 1 cota
                       </span>
                     )}
                   </div>
@@ -344,100 +321,6 @@ export function ContributionPlanner({
             })}
           </div>
         )}
-      </section>
-
-      {/* Allocation Table by Class */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Alocação por Classe
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Comparação entre objetivo definido e carteira atual
-            </p>
-          </div>
-          <Link
-            href="/objetivos"
-            className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
-          >
-            Alterar objetivos
-          </Link>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                <th className="px-5 py-3">Classe</th>
-                <th className="px-4 py-3 text-right">Objetivo</th>
-                <th className="px-4 py-3 text-right">Real</th>
-                <th className="px-4 py-3 text-right">Diff</th>
-                <th className="px-4 py-3 text-right">Investido</th>
-                <th className="px-5 py-3 text-right">Balancear</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {summary.classes.map((c) => {
-                const underTarget = c.balanceNeededBRL > 0;
-                return (
-                  <tr
-                    key={c.assetClass}
-                    className="transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50"
-                  >
-                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-slate-100">
-                      <span className="inline-flex items-center gap-2.5">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{
-                            backgroundColor: ASSET_CLASS_COLORS[c.assetClass],
-                          }}
-                        />
-                        {c.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-600 tabular-nums dark:text-slate-400">
-                      {formatPct(c.targetPct)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-slate-900 tabular-nums dark:text-slate-100">
-                      {formatPct(c.actualPct)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono tabular-nums">
-                      <span
-                        className={cn(
-                          "inline-flex rounded-md px-2 py-0.5 text-xs font-semibold",
-                          c.diffPct < -0.5
-                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-                            : c.diffPct > 0.5
-                              ? "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300"
-                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-                        )}
-                      >
-                        {c.diffPct > 0 ? "+" : ""}
-                        {formatPct(c.diffPct)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-800 tabular-nums dark:text-slate-200">
-                      {maskBRL(c.currentValueBRL, isPrivate)}
-                    </td>
-                    <td
-                      className={cn(
-                        "px-5 py-3.5 text-right font-mono font-semibold tabular-nums",
-                        underTarget
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-slate-400 dark:text-slate-500"
-                      )}
-                    >
-                      {isPrivate
-                        ? maskBRL(c.balanceNeededBRL, true)
-                        : `${underTarget ? "+" : ""}${formatBRL(c.balanceNeededBRL)}`}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </section>
     </div>
   );

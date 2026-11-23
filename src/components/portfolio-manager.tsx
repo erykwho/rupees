@@ -3,12 +3,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
   Clock,
-  Layers,
   Loader2,
   Pencil,
   Plus,
@@ -18,22 +16,13 @@ import {
   X,
 } from "lucide-react";
 import {
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
-import {
   ALL_ASSET_CLASSES,
   ASSET_CLASS_LABELS,
-  INVESTMENT_CLASSES,
   type AssetClassKey,
   type AssetSummary,
   FIXED_INCOME_INDEXES,
   FIXED_INCOME_INDEX_LABELS,
   type FixedIncomeIndexKey,
-  type InvestmentClassKey,
   type PortfolioSummary,
   type PriceModeKey,
   formatBRL,
@@ -47,28 +36,8 @@ import {
   normalizeTicker,
 } from "@/lib/domain/ticker-validation";
 import { usePrivacy } from "@/components/privacy-provider";
-import { useTheme } from "@/components/theme-provider";
 import { maskBRL, maskQty } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
-
-const SECTOR_PALETTE = [
-  "#059669",
-  "#0284c7",
-  "#2563eb",
-  "#d97706",
-  "#0f766e",
-  "#4f46e5",
-  "#db2777",
-  "#65a30d",
-  "#0891b2",
-  "#ea580c",
-  "#64748b",
-  "#10b981",
-];
-
-const SECTOR_CLASSES: InvestmentClassKey[] = INVESTMENT_CLASSES.filter(
-  (c) => c !== "FIXED_INCOME"
-);
 
 interface PortfolioManagerProps {
   initialSummary: PortfolioSummary;
@@ -114,67 +83,16 @@ const EMPTY_FORM: AssetFormState = {
 };
 
 export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
-  const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
-  const isDark = theme === "dark";
 
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [selectedClass, setSelectedClass] = useState<AssetClassKey | "ALL">(
     "ALL"
   );
-  const [selectedSectorClass, setSelectedSectorClass] =
-    useState<InvestmentClassKey>("BR_STOCK");
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
-
-  function handleSelectClass(cls: AssetClassKey | "ALL") {
-    setSelectedClass(cls);
-    if (cls !== "ALL" && SECTOR_CLASSES.includes(cls as InvestmentClassKey)) {
-      setSelectedSectorClass(cls as InvestmentClassKey);
-    }
-  }
-
-  const sectorRows = useMemo(
-    () =>
-      summary.sectors
-        .filter(
-          (s) =>
-            s.assetClass === selectedSectorClass &&
-            (s.currentValueBRL > 0 ||
-              (s.goalTargetPct ?? 0) > 0 ||
-              s.targetPctInClass > 0)
-        )
-        .map((s) => ({
-          name: s.sector,
-          value: Number(s.currentValueBRL.toFixed(2)),
-          pct: Number(s.actualPctInClass.toFixed(1)),
-          goalPct: s.goalTargetPct,
-          status: s.status,
-        })),
-    [summary.sectors, selectedSectorClass]
-  );
-
-  const sectorPieData = useMemo(
-    () => sectorRows.filter((s) => s.value > 0),
-    [sectorRows]
-  );
-
-  const tooltipContentStyle = isDark
-    ? {
-        borderRadius: "12px",
-        border: "1px solid #1e293b",
-        backgroundColor: "#0f172a",
-        color: "#f1f5f9",
-        fontSize: "12px",
-      }
-    : {
-        borderRadius: "12px",
-        border: "1px solid #e2e8f0",
-        backgroundColor: "#ffffff",
-        color: "#0f172a",
-        fontSize: "12px",
-      };
+  const [alertsExpanded, setAlertsExpanded] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<AssetFormState>(EMPTY_FORM);
@@ -584,161 +502,218 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Carteira
-          </h1>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Gerencie seus ativos, setores, percentuais alvo e saldos de Renda
-            Fixa.
-          </p>
-        </div>
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
+          Carteira
+        </h1>
 
         <button
           type="button"
           onClick={() => openCreateModal()}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
+          className="inline-flex h-8 items-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700"
         >
-          <Plus className="h-4 w-4" />
-          Adicionar ativo
+          <Plus className="h-3.5 w-3.5" />
+          <span>Ativo</span>
         </button>
       </div>
 
-      {/* Target Sum Validation Banner */}
-      {classTargetIssues.length > 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-          <div className="flex items-start gap-2.5">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <div>
-              <p className="font-semibold">
-                Atenção: soma dos objetivos dentro da classe diferente de 100%
-              </p>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {classTargetIssues.map((c) => (
-                  <span
-                    key={c.assetClass}
-                    className="rounded-lg bg-white/80 px-2.5 py-1 font-mono font-semibold text-amber-800 dark:bg-slate-900/80 dark:text-amber-300"
-                  >
-                    {c.label}: {formatPct(c.targetSumInClass, 2)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-2.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          Todas as classes de investimento fecham em 100% de alocação alvo.
-        </div>
-      )}
+      {/* Consolidated Collapsible Alerts (only shown when real issues exist) */}
+      {(classTargetIssues.length > 0 ||
+        tickerValidationIssues.length > 0 ||
+        sectorIssues.length > 0) && (
+        <div className="overflow-hidden rounded-xl border border-amber-200/90 bg-amber-50/70 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/35 dark:text-amber-200">
+          <button
+            type="button"
+            onClick={() => setAlertsExpanded((prev) => !prev)}
+            aria-expanded={alertsExpanded}
+            className="flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left font-semibold transition-colors hover:bg-amber-100/50 dark:hover:bg-amber-950/50"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="truncate">
+                {[
+                  classTargetIssues.length > 0
+                    ? `${classTargetIssues.length} ${classTargetIssues.length === 1 ? "classe" : "classes"} ≠ 100%`
+                    : null,
+                  tickerValidationIssues.length > 0
+                    ? `${tickerValidationIssues.length} ${tickerValidationIssues.length === 1 ? "ticker" : "tickers"}`
+                    : null,
+                  sectorIssues.length > 0
+                    ? `${sectorIssues.length} ${sectorIssues.length === 1 ? "setor" : "setores"}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-amber-600 transition-transform dark:text-amber-400",
+                alertsExpanded && "rotate-180"
+              )}
+            />
+          </button>
 
-      {/* Ticker Validation Inconsistency Banner */}
-      {tickerValidationIssues.length > 0 && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 text-xs text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
-          <div className="flex items-start gap-2.5">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">
-                Inconsistência de ticker detectada no Yahoo Finance
-              </p>
-              <p className="mt-0.5 text-[11px] text-rose-700/90 dark:text-rose-300/90">
-                Os ativos abaixo não foram confirmados na bolsa da sua classe ou
-                aguardam revalidação automática. Clique em um ticker para
-                corrigir.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {tickerValidationIssues.map((a) => {
-                  const isInvalid = a.tickerValidationStatus === "INVALID";
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => openEditModal(a)}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-xs font-semibold transition-colors",
-                        isInvalid
-                          ? "bg-white/90 text-rose-800 hover:bg-white dark:bg-slate-900/80 dark:text-rose-300 dark:hover:bg-slate-900"
-                          : "bg-amber-100/90 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/70 dark:text-amber-300 dark:hover:bg-amber-950"
-                      )}
-                    >
-                      <span>{a.ticker}</span>
-                      <span className="font-sans text-[10px] font-medium opacity-80">
-                        · {isInvalid ? "Inválido" : "Pendente"}
+          {alertsExpanded && (
+            <div className="space-y-3 border-t border-amber-200/70 px-3.5 py-3 dark:border-amber-900/50">
+              {classTargetIssues.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700/90 dark:text-amber-300/90">
+                    Soma das metas na classe ≠ 100%
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {classTargetIssues.map((c) => (
+                      <span
+                        key={c.assetClass}
+                        className="rounded-lg bg-white/90 px-2 py-1 font-mono text-[11px] font-semibold text-amber-800 dark:bg-slate-900/80 dark:text-amber-300"
+                      >
+                        {c.label}: {formatPct(c.targetSumInClass, 1)}
                       </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sector Coverage Alerts Banner */}
-      {sectorIssues.length > 0 && (
-        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 p-4 text-xs text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
-          <div className="flex items-start justify-between gap-2.5">
-            <div className="flex items-start gap-2.5">
-              <Layers className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" />
-              <div>
-                <p className="font-semibold">
-                  Cobertura por setor: {sectorIssues.length} setor
-                  {sectorIssues.length === 1 ? "" : "es"} com divergência na
-                  alocação alvo
-                </p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {sectorIssues.map((s) => (
-                    <span
-                      key={`${s.assetClass}::${s.sector}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-800 shadow-2xs dark:bg-slate-900/90 dark:text-slate-200"
-                    >
-                      <span className="font-semibold">
-                        {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}
-                      </span>
-                      <span className="font-mono text-slate-500 dark:text-slate-400">
-                        {formatPct(s.targetPctInClass, 1)} /{" "}
-                        {formatPct(s.goalTargetPct ?? 0, 1)}
-                      </span>
-                      {s.status === "UNCOVERED" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            openCreateModal({
-                              assetClass: s.assetClass,
-                              sector: s.sector,
-                              targetPctInClass: String(s.goalTargetPct ?? 0),
-                            })
-                          }
-                          className="ml-0.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
-                        >
-                          + Ativo
-                        </button>
-                      )}
-                    </span>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {tickerValidationIssues.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                    Tickers não validados (toque para corrigir)
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tickerValidationIssues.map((a) => {
+                      const isInvalid = a.tickerValidationStatus === "INVALID";
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => openEditModal(a)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-lg px-2 py-1 font-mono text-[11px] font-semibold transition-colors",
+                            isInvalid
+                              ? "bg-white/90 text-rose-700 hover:bg-white dark:bg-slate-900/80 dark:text-rose-300"
+                              : "bg-amber-100/90 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/70 dark:text-amber-300"
+                          )}
+                        >
+                          <span>{a.ticker}</span>
+                          <span className="font-sans text-[10px] font-medium opacity-80">
+                            · {isInvalid ? "Inválido" : "Pendente"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {sectorIssues.length > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/90 dark:text-amber-300/90">
+                      Divergência por setor
+                    </p>
+                    <Link
+                      href="/objetivos"
+                      className="text-[11px] font-semibold text-emerald-700 hover:underline dark:text-emerald-400"
+                    >
+                      Objetivos →
+                    </Link>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sectorIssues.map((s) => (
+                      <span
+                        key={`${s.assetClass}::${s.sector}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-800 dark:bg-slate-900/90 dark:text-slate-200"
+                      >
+                        <span className="font-semibold">
+                          {ASSET_CLASS_LABELS[s.assetClass]} · {s.sector}
+                        </span>
+                        <span className="font-mono text-slate-500 dark:text-slate-400">
+                          {formatPct(s.targetPctInClass, 0)}/
+                          {formatPct(s.goalTargetPct ?? 0, 0)}
+                        </span>
+                        {s.status === "UNCOVERED" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openCreateModal({
+                                assetClass: s.assetClass,
+                                sector: s.sector,
+                                targetPctInClass: String(s.goalTargetPct ?? 0),
+                              })
+                            }
+                            className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
+                          >
+                            + Ativo
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            <Link
-              href="/objetivos"
-              className="shrink-0 font-semibold text-rose-700 hover:underline dark:text-rose-300"
-            >
-              Objetivos →
-            </Link>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Mobile Single-Row Filter Bar */}
+      <div className="flex items-center gap-1.5 md:hidden">
+        <div className="relative shrink-0">
+          <select
+            aria-label="Filtrar por classe"
+            value={selectedClass}
+            onChange={(e) =>
+              setSelectedClass(e.target.value as AssetClassKey | "ALL")
+            }
+            className="h-9 appearance-none rounded-xl border border-slate-200 bg-white pl-2.5 pr-7 text-xs font-semibold text-slate-700 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <option value="ALL">Todas</option>
+            {ALL_ASSET_CLASSES.map((cls) => (
+              <option key={cls} value={cls}>
+                {ASSET_CLASS_LABELS[cls]}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            aria-hidden="true"
+            className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+          />
+        </div>
+
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar..."
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowInactive((prev) => !prev)}
+          aria-pressed={showInactive}
+          className={cn(
+            "h-9 shrink-0 rounded-xl border px-2.5 text-xs font-semibold transition-colors",
+            showInactive
+              ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+              : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+          )}
+        >
+          Inativos
+        </button>
+      </div>
+
+      {/* Desktop Filter Bar */}
+      <div className="hidden items-center justify-between gap-3 md:flex">
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
-            onClick={() => handleSelectClass("ALL")}
+            onClick={() => setSelectedClass("ALL")}
             className={cn(
               "rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
               selectedClass === "ALL"
@@ -752,7 +727,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             <button
               key={cls}
               type="button"
-              onClick={() => handleSelectClass(cls)}
+              onClick={() => setSelectedClass(cls)}
               className={cn(
                 "rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
                 selectedClass === cls
@@ -766,25 +741,29 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-56">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+          <div className="relative w-52">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Buscar ticker ou setor..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+              className="w-full rounded-xl border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
-          <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
-            />
+          <button
+            type="button"
+            onClick={() => setShowInactive((prev) => !prev)}
+            aria-pressed={showInactive}
+            className={cn(
+              "whitespace-nowrap rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
+              showInactive
+                ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            )}
+          >
             Inativos
-          </label>
+          </button>
         </div>
       </div>
 
@@ -969,64 +948,46 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
 
                             <div
                               className={cn(
-                                "flex flex-wrap items-center justify-between gap-2",
+                                "flex items-center justify-end gap-1.5",
                                 !isFixedOrReserve &&
                                   "border-t border-slate-200/70 pt-2.5 dark:border-slate-700/70"
                               )}
                             >
-                              <div className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
-                                <span className="font-medium text-slate-700 dark:text-slate-300">
-                                  {ASSET_CLASS_LABELS[a.assetClass]}
-                                </span>
-                                {a.sector && <span> · {a.sector}</span>}
-                                {a.assetClass === "EMERGENCY_RESERVE" ? (
-                                  <span className="block text-[11px] text-slate-400 dark:text-slate-500">
-                                    Reserva de emergência
-                                  </span>
-                                ) : (
-                                  <span className="block font-mono text-[11px] text-slate-400 dark:text-slate-500">
-                                    {formatPct(a.targetPctInClass)} na classe
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                {isFixedOrReserve && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openBalanceModal(a);
-                                    }}
-                                    className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
-                                  >
-                                    Saldo
-                                  </button>
-                                )}
+                              {isFixedOrReserve && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    openEditModal(a);
+                                    openBalanceModal(a);
                                   }}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                                  className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
                                 >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                  Editar
+                                  Saldo
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteAsset(a);
-                                  }}
-                                  aria-label={`Excluir ${a.ticker}`}
-                                  title="Excluir ativo"
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-rose-900/60 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(a);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAsset(a);
+                                }}
+                                aria-label={`Excluir ${a.ticker}`}
+                                title="Excluir ativo"
+                                className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-rose-900/60 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1217,130 +1178,6 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
           </table>
         </div>
       </div>
-
-      {/* Sector Allocation Chart */}
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Alocação por Setor
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Concentração setorial dentro da classe
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {SECTOR_CLASSES.map((cls) => (
-              <button
-                key={cls}
-                type="button"
-                onClick={() => setSelectedSectorClass(cls)}
-                className={cn(
-                  "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
-                  selectedSectorClass === cls
-                    ? "bg-emerald-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                )}
-              >
-                {ASSET_CLASS_LABELS[cls]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {sectorRows.length === 0 ? (
-          <div className="flex h-64 items-center justify-center text-sm text-slate-400 dark:text-slate-500">
-            Nenhum valor investido ou meta de setor nesta classe ainda.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-            <div className="h-56 w-full">
-              {sectorPieData.length === 0 ? (
-                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-200 px-4 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
-                  Nenhum valor investido nesta classe ainda.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={sectorPieData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={48}
-                      outerRadius={82}
-                      paddingAngle={2}
-                      stroke={isDark ? "#0f172a" : "#ffffff"}
-                    >
-                      {sectorPieData.map((entry, idx) => (
-                        <Cell
-                          key={entry.name}
-                          fill={SECTOR_PALETTE[idx % SECTOR_PALETTE.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) => maskBRL(Number(value), isPrivate)}
-                      contentStyle={tooltipContentStyle}
-                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-              {sectorRows.map((s) => {
-                const pieIdx = sectorPieData.findIndex(
-                  (p) => p.name === s.name
-                );
-                return (
-                  <div
-                    key={s.name}
-                    className="flex items-center justify-between gap-2 text-xs"
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
-                      <span
-                        className={cn(
-                          "h-2.5 w-2.5 shrink-0 rounded-full",
-                          pieIdx < 0 &&
-                            "border border-dashed border-slate-400 bg-transparent dark:border-slate-500"
-                        )}
-                        style={
-                          pieIdx >= 0
-                            ? {
-                                backgroundColor:
-                                  SECTOR_PALETTE[
-                                    pieIdx % SECTOR_PALETTE.length
-                                  ],
-                              }
-                            : undefined
-                        }
-                      />
-                      <span className="truncate">{s.name}</span>
-                      {s.status === "UNCOVERED" && (
-                        <span className="shrink-0 rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
-                          Sem ativos
-                        </span>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-right font-mono tabular-nums">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {formatPct(s.pct)}
-                      </span>
-                      {s.goalPct !== null && (
-                        <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">
-                          / alvo {formatPct(s.goalPct, 0)}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </section>
 
       {/* Create / Edit Asset Modal */}
       {modalOpen && (
@@ -1788,7 +1625,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                       }
                       className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
                     />
-                    Isento de Imposto de Renda (LCI, LCA, CRI, CRA)
+                    Isento de IR (LCI, LCA, CRI, CRA)
                   </label>
                 </div>
               )}
@@ -1802,7 +1639,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                   }
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600"
                 />
-                Ativo na carteira (participa do plano de aporte)
+                Ativo na carteira
               </label>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1829,12 +1666,12 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       {/* Quick Balance Update Modal (Fixed Income / Reserve) */}
       {balanceModalAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs dark:bg-slate-950/70">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  Atualizar saldo — {balanceModalAsset.ticker}
+                  Saldo — {balanceModalAsset.ticker}
                 </h2>
               </div>
               <button
@@ -1845,12 +1682,11 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-              Saldo atual registrado:{" "}
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Atual:{" "}
               <strong className="font-mono text-slate-800 dark:text-slate-200">
                 {maskBRL(balanceModalAsset.currentValueBRL, isPrivate)}
               </strong>
-              . Informe o valor atual na corretora para registrar o rendimento.
             </p>
             <form
               onSubmit={handleUpdateFixedIncomeBalance}
@@ -1858,7 +1694,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
             >
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Novo saldo total (R$)
+                  Novo saldo (R$)
                 </label>
                 <input
                   required
@@ -1883,7 +1719,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
                   disabled={savingBalance}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {savingBalance ? "Salvando..." : "Atualizar saldo"}
+                  {savingBalance ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>
