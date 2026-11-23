@@ -10,15 +10,16 @@ import {
 } from "lucide-react";
 import { computeContributionPlan } from "@/lib/domain/calculations";
 import {
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   INVESTMENT_CLASSES,
   type ContributionSuggestion,
   type InvestmentClassKey,
   type PortfolioSummary,
   formatBRL,
+  getAssetClassColor,
 } from "@/lib/domain/types";
 import { usePrivacy } from "@/components/privacy-provider";
+import { useTheme } from "@/components/theme-provider";
 import { maskBRL, maskQty, maskUSD } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,8 @@ export function ContributionPlanner({
   initialSummary,
 }: ContributionPlannerProps) {
   const { isPrivate } = usePrivacy();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [amountInput, setAmountInput] = useState("1000");
   const [maxAssets, setMaxAssets] = useState(3);
@@ -258,7 +261,10 @@ export function ContributionPlanner({
                         <span
                           className="h-1.5 w-1.5 rounded-full"
                           style={{
-                            backgroundColor: ASSET_CLASS_COLORS[s.assetClass],
+                            backgroundColor: getAssetClassColor(
+                              s.assetClass,
+                              isDark
+                            ),
                           }}
                         />
                         {ASSET_CLASS_LABELS[s.assetClass]}

@@ -87,13 +87,31 @@ export const ASSET_CLASS_LABELS: Record<AssetClassKey, string> = {
 };
 
 export const ASSET_CLASS_COLORS: Record<AssetClassKey, string> = {
-  FIXED_INCOME: "#ec4899", // Rosa / Magenta
-  BR_STOCK: "#10b981", // Verde Esmeralda
-  BR_FII: "#8b5cf6", // Roxo / Violeta
-  US_STOCK: "#0ea5e9", // Azul Celeste
-  US_REIT: "#f59e0b", // Âmbar / Laranja
-  EMERGENCY_RESERVE: "#64748b", // Cinza Slate
+  FIXED_INCOME: "#ec4899", // Rose / Magenta
+  BR_STOCK: "#10b981", // Emerald
+  BR_FII: "#8b5cf6", // Violet
+  US_STOCK: "#0ea5e9", // Sky Blue
+  US_REIT: "#f59e0b", // Amber
+  EMERGENCY_RESERVE: "#64748b", // Slate
 };
+
+export const ASSET_CLASS_COLORS_DARK: Record<AssetClassKey, string> = {
+  FIXED_INCOME: "#c77d99", // Muted dusty rose
+  BR_STOCK: "#7eb88c", // Soft olive green
+  BR_FII: "#a892c9", // Muted lavender
+  US_STOCK: "#7da9bf", // Soft slate blue
+  US_REIT: "#d2ab67", // Warm ochre
+  EMERGENCY_RESERVE: "#8c8478", // Warm stone gray
+};
+
+export function getAssetClassColor(
+  assetClass: AssetClassKey,
+  isDark: boolean
+): string {
+  return isDark
+    ? ASSET_CLASS_COLORS_DARK[assetClass]
+    : ASSET_CLASS_COLORS[assetClass];
+}
 
 export interface GoalInput {
   fixedIncomePct: number;

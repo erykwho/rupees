@@ -351,8 +351,11 @@ export function LongTermProjectionView({
   const isRealPrimary = displayBasis === "REAL";
   const isRealReturnPositive = summary.realAnnualReturnPct > 0;
 
-  const chartGridColor = isDark ? "#1e293b" : "#f1f5f9";
-  const chartTickColor = isDark ? "#94a3b8" : "#64748b";
+  const chartGridColor = isDark ? "#2d2a25" : "#f1f5f9";
+  const chartTickColor = isDark ? "#a39c92" : "#64748b";
+  const realStrokeColor = isDark ? "#7eb88c" : "#10b981";
+  const nominalStrokeColor = isDark ? "#9a99cc" : "#6366f1";
+  const contributedStrokeColor = isDark ? "#8c8478" : "#94a3b8";
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -794,8 +797,16 @@ export function LongTermProjectionView({
             >
               <defs>
                 <linearGradient id="ltpRealGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                  <stop
+                    offset="5%"
+                    stopColor={realStrokeColor}
+                    stopOpacity={0.28}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={realStrokeColor}
+                    stopOpacity={0.02}
+                  />
                 </linearGradient>
                 <linearGradient
                   id="ltpNominalGrad"
@@ -804,8 +815,16 @@ export function LongTermProjectionView({
                   x2="0"
                   y2="1"
                 >
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop
+                    offset="5%"
+                    stopColor={nominalStrokeColor}
+                    stopOpacity={0.18}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={nominalStrokeColor}
+                    stopOpacity={0}
+                  />
                 </linearGradient>
               </defs>
               <CartesianGrid
@@ -848,7 +867,7 @@ export function LongTermProjectionView({
                 type="monotone"
                 dataKey="nominalBalanceBRL"
                 name="Nominal"
-                stroke="#6366f1"
+                stroke={nominalStrokeColor}
                 strokeWidth={isRealPrimary ? 1.75 : 2.25}
                 strokeDasharray={isRealPrimary ? "4 4" : undefined}
                 fill="url(#ltpNominalGrad)"
@@ -860,7 +879,7 @@ export function LongTermProjectionView({
                 type="monotone"
                 dataKey="realBalanceBRL"
                 name="Real"
-                stroke="#10b981"
+                stroke={realStrokeColor}
                 strokeWidth={isRealPrimary ? 2.25 : 1.75}
                 strokeDasharray={isRealPrimary ? undefined : "4 4"}
                 fill="url(#ltpRealGrad)"
@@ -874,7 +893,7 @@ export function LongTermProjectionView({
                   isRealPrimary ? "realContributedBRL" : "nominalContributedBRL"
                 }
                 name="Aportado"
-                stroke="#94a3b8"
+                stroke={contributedStrokeColor}
                 strokeWidth={1.5}
                 fill="none"
                 isAnimationActive={

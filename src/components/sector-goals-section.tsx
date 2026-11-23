@@ -12,14 +12,15 @@ import {
   X,
 } from "lucide-react";
 import {
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   VARIABLE_INCOME_CLASSES,
   type PortfolioSummary,
   type SectorSummary,
   type VariableIncomeClassKey,
   formatPct,
+  getAssetClassColor,
 } from "@/lib/domain/types";
+import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 interface SectorGoalsSectionProps {
@@ -29,6 +30,8 @@ interface SectorGoalsSectionProps {
 export function SectorGoalsSection({
   initialSummary,
 }: SectorGoalsSectionProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
   const [selectedClass, setSelectedClass] =
     useState<VariableIncomeClassKey>("BR_STOCK");
@@ -290,7 +293,7 @@ export function SectorGoalsSection({
                 style={{
                   backgroundColor: active
                     ? "#ffffff"
-                    : ASSET_CLASS_COLORS[cls],
+                    : getAssetClassColor(cls, isDark),
                 }}
               />
               <span>{ASSET_CLASS_LABELS[cls]}</span>
@@ -467,7 +470,10 @@ export function SectorGoalsSection({
                           className="h-full rounded-full transition-all"
                           style={{
                             width: `${Math.min(100, Math.max(0, actualPct))}%`,
-                            backgroundColor: ASSET_CLASS_COLORS[selectedClass],
+                            backgroundColor: getAssetClassColor(
+                              selectedClass,
+                              isDark
+                            ),
                           }}
                         />
                         {goalPct > 0 && goalPct <= 100 && (

@@ -88,6 +88,20 @@ test.describe("Rupees E2E Smoke Suite (Mobile PWA)", () => {
       .evaluate((el) => el.classList.contains("dark"));
     expect(afterReloadIsDark).toBe(!initialIsDark);
 
+    if (afterReloadIsDark) {
+      const darkStyleCheck = await page.evaluate(() => ({
+        bg: getComputedStyle(document.body).backgroundColor,
+        fontFamily: getComputedStyle(document.body).fontFamily,
+        themeColor:
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.getAttribute("content") ?? null,
+      }));
+      expect(darkStyleCheck.bg).toBe("rgb(24, 23, 21)");
+      expect(darkStyleCheck.themeColor).toBe("#181715");
+      expect(darkStyleCheck.fontFamily.toLowerCase()).toContain("geist");
+    }
+
     expect(errors).toEqual([]);
   });
 

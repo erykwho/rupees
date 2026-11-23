@@ -35,12 +35,12 @@ import {
 } from "recharts";
 import {
   ALL_ASSET_CLASSES,
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   INVESTMENT_CLASSES,
   formatBRL,
   formatPct,
+  getAssetClassColor,
 } from "@/lib/domain/types";
 import {
   type AggregatedContributionPoint,
@@ -108,6 +108,7 @@ interface EvolutionTooltipProps {
   activeClasses?: AssetClassKey[];
   chartMode?: EvolutionChartMode;
   isPrivate?: boolean;
+  isDark?: boolean;
 }
 
 function EvolutionTooltip({
@@ -117,6 +118,7 @@ function EvolutionTooltip({
   activeClasses = [],
   chartMode = "PATRIMONIO",
   isPrivate = false,
+  isDark = false,
 }: EvolutionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const pt = payload[0]?.payload;
@@ -153,7 +155,7 @@ function EvolutionTooltip({
                   <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                      style={{ backgroundColor: getAssetClassColor(cls, isDark) }}
                     />
                     <span className="truncate">{ASSET_CLASS_LABELS[cls]}</span>
                   </span>
@@ -181,7 +183,7 @@ function EvolutionTooltip({
 
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />
             {splitByClass ? "Total" : "Patrimônio"}
           </span>
           <span className="font-semibold text-slate-900 dark:text-slate-100">
@@ -223,6 +225,7 @@ interface EvolutionMobileReadoutProps {
   activeClasses: AssetClassKey[];
   chartMode: EvolutionChartMode;
   isPrivate: boolean;
+  isDark: boolean;
 }
 
 function EvolutionMobileReadout({
@@ -232,6 +235,7 @@ function EvolutionMobileReadout({
   activeClasses,
   chartMode,
   isPrivate,
+  isDark,
 }: EvolutionMobileReadoutProps) {
   if (!point) return null;
   const isPositive = point.profitLossBRL >= 0;
@@ -265,7 +269,7 @@ function EvolutionMobileReadout({
               >
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                  style={{ backgroundColor: getAssetClassColor(cls, isDark) }}
                 />
                 <span
                   className={cn(
@@ -349,6 +353,7 @@ interface ContributionTooltipProps {
   payload?: Array<{ payload?: AggregatedContributionPoint }>;
   activeClasses: AssetClassKey[];
   isPrivate?: boolean;
+  isDark?: boolean;
 }
 
 function ContributionTooltip({
@@ -356,6 +361,7 @@ function ContributionTooltip({
   payload,
   activeClasses,
   isPrivate = false,
+  isDark = false,
 }: ContributionTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   const row = payload[0]?.payload;
@@ -396,7 +402,7 @@ function ContributionTooltip({
                 <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                    style={{ backgroundColor: getAssetClassColor(cls, isDark) }}
                   />
                   <span className="truncate">{ASSET_CLASS_LABELS[cls]}</span>
                 </span>
@@ -604,9 +610,16 @@ export function EvolutionView({
   const isGainPositive = gainValue >= 0;
   const isTotalReturnPositive = kpis.totalProfitLossPct >= 0;
 
-  const gridStroke = isDark ? "#1e293b" : "#e2e8f0";
-  const axisTickFill = isDark ? "#94a3b8" : "#64748b";
-  const refLineStroke = isDark ? "#475569" : "#94a3b8";
+  const gridStroke = isDark ? "#2d2a25" : "#e2e8f0";
+  const axisTickFill = isDark ? "#a39c92" : "#64748b";
+  const refLineStroke = isDark ? "#554f47" : "#94a3b8";
+  const emeraldChartColor = isDark ? "#7eb88c" : "#10b981";
+  const emeraldGradColor = isDark ? "#7eb88c" : "#059669";
+  const roseChartColor = isDark ? "#d4887c" : "#f43f5e";
+  const roseGradColor = isDark ? "#d4887c" : "#e11d48";
+  const blueChartColor = isDark ? "#7da9bf" : "#0ea5e9";
+  const blueGradColor = isDark ? "#7da9bf" : "#0284c7";
+  const costLineColor = isDark ? "#8c8478" : "#64748b";
 
   return (
     <>
@@ -727,7 +740,10 @@ export function EvolutionView({
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
                       style={{
-                        backgroundColor: ASSET_CLASS_COLORS[selectedClasses[0]],
+                        backgroundColor: getAssetClassColor(
+                          selectedClasses[0],
+                          isDark
+                        ),
                       }}
                     />
                   ) : (
@@ -736,7 +752,9 @@ export function EvolutionView({
                         <span
                           key={cls}
                           className="h-2 w-2 rounded-full ring-1 ring-white dark:ring-slate-900"
-                          style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                          style={{
+                            backgroundColor: getAssetClassColor(cls, isDark),
+                          }}
                         />
                       ))}
                     </span>
@@ -846,7 +864,9 @@ export function EvolutionView({
                     >
                       <span
                         className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                        style={{
+                          backgroundColor: getAssetClassColor(cls, isDark),
+                        }}
                       />
                       {ASSET_CLASS_LABELS[cls]}
                     </button>
@@ -1105,6 +1125,7 @@ export function EvolutionView({
                       activeClasses={activeClasses}
                       chartMode={chartMode}
                       isPrivate={isPrivate}
+                      isDark={isDark}
                     />
                   }
                   className="h-80"
@@ -1125,12 +1146,12 @@ export function EvolutionView({
                         >
                           <stop
                             offset="0%"
-                            stopColor="#059669"
+                            stopColor={emeraldGradColor}
                             stopOpacity={0.22}
                           />
                           <stop
                             offset="100%"
-                            stopColor="#059669"
+                            stopColor={emeraldGradColor}
                             stopOpacity={0.01}
                           />
                         </linearGradient>
@@ -1143,12 +1164,12 @@ export function EvolutionView({
                         >
                           <stop
                             offset="0%"
-                            stopColor="#e11d48"
+                            stopColor={roseGradColor}
                             stopOpacity={0.2}
                           />
                           <stop
                             offset="100%"
-                            stopColor="#e11d48"
+                            stopColor={roseGradColor}
                             stopOpacity={0.01}
                           />
                         </linearGradient>
@@ -1161,12 +1182,12 @@ export function EvolutionView({
                         >
                           <stop
                             offset="0%"
-                            stopColor="#0284c7"
+                            stopColor={blueGradColor}
                             stopOpacity={0.22}
                           />
                           <stop
                             offset="100%"
-                            stopColor="#0284c7"
+                            stopColor={blueGradColor}
                             stopOpacity={0.01}
                           />
                         </linearGradient>
@@ -1215,6 +1236,7 @@ export function EvolutionView({
                             activeClasses={activeClasses}
                             chartMode={chartMode}
                             isPrivate={isPrivate}
+                            isDark={isDark}
                           />
                         }
                       />
@@ -1228,33 +1250,36 @@ export function EvolutionView({
                               strokeDasharray="3 3"
                             />
                           )}
-                          {activeClasses.map((cls) => (
-                            <Area
-                              key={cls}
-                              type="monotone"
-                              dataKey={(d: AggregatedEvolutionPoint) =>
-                                chartMode === "PATRIMONIO"
-                                  ? d.classMarketValue[cls]
-                                  : chartMode === "GANHO"
-                                    ? d.classProfitLoss[cls]
-                                    : d.classProfitLossPct[cls]
-                              }
-                              name={ASSET_CLASS_LABELS[cls]}
-                              stroke={ASSET_CLASS_COLORS[cls]}
-                              strokeWidth={2}
-                              fill="none"
-                              dot={false}
-                              isAnimationActive={
-                                !evolutionZoom.isInteracting &&
-                                !evolutionZoom.isZoomed
-                              }
-                              activeDot={{
-                                r: 4,
-                                strokeWidth: 0,
-                                fill: ASSET_CLASS_COLORS[cls],
-                              }}
-                            />
-                          ))}
+                          {activeClasses.map((cls) => {
+                            const classColor = getAssetClassColor(cls, isDark);
+                            return (
+                              <Area
+                                key={cls}
+                                type="monotone"
+                                dataKey={(d: AggregatedEvolutionPoint) =>
+                                  chartMode === "PATRIMONIO"
+                                    ? d.classMarketValue[cls]
+                                    : chartMode === "GANHO"
+                                      ? d.classProfitLoss[cls]
+                                      : d.classProfitLossPct[cls]
+                                }
+                                name={ASSET_CLASS_LABELS[cls]}
+                                stroke={classColor}
+                                strokeWidth={2}
+                                fill="none"
+                                dot={false}
+                                isAnimationActive={
+                                  !evolutionZoom.isInteracting &&
+                                  !evolutionZoom.isZoomed
+                                }
+                                activeDot={{
+                                  r: 4,
+                                  strokeWidth: 0,
+                                  fill: classColor,
+                                }}
+                              />
+                            );
+                          })}
                         </>
                       ) : (
                         <>
@@ -1264,7 +1289,7 @@ export function EvolutionView({
                                 type="monotone"
                                 dataKey="marketValueBRL"
                                 name="Patrimônio"
-                                stroke="#10b981"
+                                stroke={emeraldChartColor}
                                 strokeWidth={2.2}
                                 fill="url(#evoEmeraldGrad)"
                                 dot={false}
@@ -1275,14 +1300,14 @@ export function EvolutionView({
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
-                                  fill: "#10b981",
+                                  fill: emeraldChartColor,
                                 }}
                               />
                               <Area
                                 type="monotone"
                                 dataKey="investedCostBRL"
                                 name="Aportado"
-                                stroke={isDark ? "#94a3b8" : "#64748b"}
+                                stroke={costLineColor}
                                 strokeWidth={1.8}
                                 strokeDasharray="5 4"
                                 fill="none"
@@ -1294,7 +1319,7 @@ export function EvolutionView({
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
-                                  fill: isDark ? "#94a3b8" : "#64748b",
+                                  fill: costLineColor,
                                 }}
                               />
                             </>
@@ -1313,8 +1338,8 @@ export function EvolutionView({
                                 name="Rendimento (R$)"
                                 stroke={
                                   kpis.totalProfitLossBRL >= 0
-                                    ? "#10b981"
-                                    : "#f43f5e"
+                                    ? emeraldChartColor
+                                    : roseChartColor
                                 }
                                 strokeWidth={2.2}
                                 fill={
@@ -1332,8 +1357,8 @@ export function EvolutionView({
                                   strokeWidth: 0,
                                   fill:
                                     kpis.totalProfitLossBRL >= 0
-                                      ? "#10b981"
-                                      : "#f43f5e",
+                                      ? emeraldChartColor
+                                      : roseChartColor,
                                 }}
                               />
                             </>
@@ -1350,7 +1375,7 @@ export function EvolutionView({
                                 type="monotone"
                                 dataKey="profitLossPct"
                                 name="Rentabilidade (%)"
-                                stroke="#0ea5e9"
+                                stroke={blueChartColor}
                                 strokeWidth={2.2}
                                 fill="url(#evoBlueGrad)"
                                 dot={false}
@@ -1361,7 +1386,7 @@ export function EvolutionView({
                                 activeDot={{
                                   r: 4,
                                   strokeWidth: 0,
-                                  fill: "#0ea5e9",
+                                  fill: blueChartColor,
                                 }}
                               />
                             </>
@@ -1381,7 +1406,9 @@ export function EvolutionView({
                       >
                         <span
                           className="h-0.5 w-4 rounded-full"
-                          style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                          style={{
+                            backgroundColor: getAssetClassColor(cls, isDark),
+                          }}
                         />
                         {ASSET_CLASS_LABELS[cls]}
                       </span>
@@ -1391,7 +1418,7 @@ export function EvolutionView({
                   chartMode === "PATRIMONIO" && (
                     <div className="mt-3 hidden flex-wrap items-center justify-center gap-5 text-xs text-slate-600 sm:flex dark:text-slate-400">
                       <span className="inline-flex items-center gap-2">
-                        <span className="h-0.5 w-4 rounded-full bg-emerald-500" />
+                        <span className="h-0.5 w-4 rounded-full bg-emerald-500 dark:bg-emerald-400" />
                         Patrimônio
                       </span>
                       <span className="inline-flex items-center gap-2">
@@ -1474,6 +1501,7 @@ export function EvolutionView({
                           <ContributionTooltip
                             activeClasses={activeClasses}
                             isPrivate={isPrivate}
+                            isDark={isDark}
                           />
                         }
                       />
@@ -1483,7 +1511,7 @@ export function EvolutionView({
                           dataKey={cls}
                           name={ASSET_CLASS_LABELS[cls]}
                           stackId="aportes"
-                          fill={ASSET_CLASS_COLORS[cls]}
+                          fill={getAssetClassColor(cls, isDark)}
                           maxBarSize={42}
                           isAnimationActive={
                             !contributionZoom.isInteracting &&
@@ -1504,7 +1532,9 @@ export function EvolutionView({
                     >
                       <span
                         className="h-2.5 w-2.5 rounded-xs"
-                        style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                        style={{
+                          backgroundColor: getAssetClassColor(cls, isDark),
+                        }}
                       />
                       {ASSET_CLASS_LABELS[cls]}
                     </span>
@@ -1602,7 +1632,7 @@ export function EvolutionView({
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
                           style={{
-                            backgroundColor: ASSET_CLASS_COLORS[cls],
+                            backgroundColor: getAssetClassColor(cls, isDark),
                           }}
                         />
                         {ASSET_CLASS_LABELS[cls]}
