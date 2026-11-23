@@ -14,6 +14,7 @@ import {
   isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { normalizeTicker } from "@/lib/domain/ticker-validation";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 import { validateTickerOnYahoo } from "@/lib/ticker-validator";
 
 const updateAssetSchema = z.object({
@@ -197,6 +198,7 @@ export async function PATCH(
       return result;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({ asset: updated });
   } catch (err: unknown) {
     const authRes = authErrorResponse(err);
@@ -266,6 +268,7 @@ export async function DELETE(
       });
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({ deleted: true });
   } catch (err) {
     const authRes = authErrorResponse(err);

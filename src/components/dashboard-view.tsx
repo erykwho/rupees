@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -44,6 +45,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ initialSummary }: DashboardViewProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const { isPrivate } = usePrivacy();
   const isDark = theme === "dark";
@@ -60,6 +62,7 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
       if (res.ok) {
         const data = await res.json();
         setSummary(data.summary);
+        router.refresh();
       }
     } finally {
       setRefreshing(false);

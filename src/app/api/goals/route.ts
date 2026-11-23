@@ -7,6 +7,7 @@ import {
   recordAuditEvent,
   toGoalSnapshot,
 } from "@/lib/audit-service";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 
 const goalSchema = z
   .object({
@@ -97,6 +98,7 @@ export async function PUT(request: Request) {
       return saved;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({ goal });
   } catch (err) {
     const authRes = authErrorResponse(err);

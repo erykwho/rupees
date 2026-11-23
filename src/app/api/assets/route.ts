@@ -13,6 +13,7 @@ import {
   isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { normalizeTicker } from "@/lib/domain/ticker-validation";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 import { validateTickerOnYahoo } from "@/lib/ticker-validator";
 
 const fixedIncomeIndexSchema = z
@@ -205,6 +206,7 @@ export async function POST(request: Request) {
       return created;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({ asset }, { status: 201 });
   } catch (err: unknown) {
     const authRes = authErrorResponse(err);

@@ -309,10 +309,14 @@ export async function listAuditEvents(
   userId: string,
   params: ListAuditEventsParams = {}
 ): Promise<ListAuditEventsResult> {
-  await ensureAuditBackfill(userId);
-
   const limit = Math.min(Math.max(params.limit ?? 30, 1), 100);
   const query = params.q?.trim();
+  const hasFiltersOrCursor = Boolean(
+    (params.entityType && params.entityType !== "ALL") ||
+      (params.action && params.action !== "ALL") ||
+      query ||
+      params.cursor
+  );
 
   const where: Prisma.AuditEventWhereInput = {
     userId,
@@ -332,26 +336,34 @@ export async function listAuditEvents(
       : {}),
   };
 
-  const [totalCount, rawEvents] = await Promise.all([
-    prisma.auditEvent.count({ where }),
-    prisma.auditEvent.findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: limit + 1,
-      ...(params.cursor
-        ? {
-            cursor: { id: params.cursor },
-            skip: 1,
-          }
-        : {}),
-      include: {
-        revertedBy: {
-          select: { id: true },
-          take: 1,
+  const fetchPage = () =>
+    Promise.all([
+      prisma.auditEvent.count({ where }),
+      prisma.auditEvent.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        ...(params.cursor
+          ? {
+              cursor: { id: params.cursor },
+              skip: 1,
+            }
+          : {}),
+        include: {
+          revertedBy: {
+            select: { id: true },
+            take: 1,
+          },
         },
-      },
-    }),
-  ]);
+      }),
+    ]);
+
+  let [totalCount, rawEvents] = await fetchPage();
+
+  if (totalCount === 0 && !hasFiltersOrCursor) {
+    await ensureAuditBackfill(userId);
+    [totalCount, rawEvents] = await fetchPage();
+  }
 
   const hasMore = rawEvents.length > limit;
   const pageEvents = hasMore ? rawEvents.slice(0, limit) : rawEvents;

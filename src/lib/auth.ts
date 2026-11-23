@@ -1,3 +1,4 @@
+import { cache } from "react";
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 import { authConfig, isEmailAllowed } from "@/auth.config";
@@ -71,11 +72,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
-async function resolveAuthenticatedUser() {
+const getOptionalAuthenticatedUser = cache(async () => {
   const session = await auth();
   const email = session?.user?.email?.toLowerCase();
   if (!email) {
-    throw new Error("UNAUTHORIZED");
+    return null;
   }
 
   let dbUser = await prisma.user.findUnique({
@@ -93,7 +94,19 @@ async function resolveAuthenticatedUser() {
     });
   }
 
-  return dbUser;
+  return { session, dbUser };
+});
+
+async function resolveAuthenticatedUser() {
+  const resolved = await getOptionalAuthenticatedUser();
+  if (!resolved) {
+    throw new Error("UNAUTHORIZED");
+  }
+  return resolved.dbUser;
+}
+
+export async function getAuthenticatedSessionAndUser() {
+  return getOptionalAuthenticatedUser();
 }
 
 /**

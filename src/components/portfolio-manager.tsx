@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -83,6 +84,7 @@ const EMPTY_FORM: AssetFormState = {
 };
 
 export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
+  const router = useRouter();
   const { isPrivate } = usePrivacy();
 
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
@@ -132,6 +134,7 @@ export function PortfolioManager({ initialSummary }: PortfolioManagerProps) {
       const data = await res.json();
       setSummary(data.summary);
     }
+    router.refresh();
   }
 
   // Close autocomplete dropdown on outside click

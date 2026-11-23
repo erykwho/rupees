@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authErrorResponse, requireUser } from "@/lib/auth";
 import { RevertConflictError, revertAuditEvent } from "@/lib/audit-service";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 
 export async function POST(
   _request: Request,
@@ -11,6 +12,7 @@ export async function POST(
     const { id } = await context.params;
 
     const revertEvent = await revertAuditEvent(user.id, id);
+    invalidateUserFinancialCaches(user.id);
 
     return NextResponse.json(
       {

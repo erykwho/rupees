@@ -8,6 +8,7 @@ import {
   recordAuditEvent,
   toSectorGoalSnapshot,
 } from "@/lib/audit-service";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 import type { VariableIncomeClassKey } from "@/lib/domain/types";
 
 const updateSectorGoalSchema = z
@@ -101,6 +102,7 @@ export async function PATCH(
       return result;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({
       sectorGoal: {
         id: updated.id,
@@ -187,6 +189,7 @@ export async function DELETE(
       });
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json({ deleted: true });
   } catch (err) {
     const authRes = authErrorResponse(err);

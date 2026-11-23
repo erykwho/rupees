@@ -8,6 +8,7 @@ import {
   recordAuditEvent,
   toTransactionSnapshot,
 } from "@/lib/audit-service";
+import { invalidateUserFinancialCaches } from "@/lib/server-cache";
 
 const createTransactionSchema = z.object({
   assetId: z.string().min(1),
@@ -173,6 +174,7 @@ export async function POST(request: Request) {
       return created;
     });
 
+    invalidateUserFinancialCaches(user.id);
     return NextResponse.json(
       {
         transaction: {

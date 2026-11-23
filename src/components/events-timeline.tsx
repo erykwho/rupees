@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeftRight,
@@ -121,6 +122,7 @@ export function EventsTimeline({
   initialNextCursor,
   initialTotalCount,
 }: EventsTimelineProps) {
+  const router = useRouter();
   const { isPrivate } = usePrivacy();
 
   const [events, setEvents] = useState<AuditEventDTO[]>(initialEvents);
@@ -229,6 +231,7 @@ export function EventsTimeline({
         message: `"${label}" revertido com sucesso.`,
       });
       await fetchEvents({ append: false });
+      router.refresh();
     } catch (err) {
       setFeedback({
         type: "error",
