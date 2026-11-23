@@ -3,8 +3,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
 :root {
@@ -13,10 +13,89 @@
   color-scheme: light;
 }
 
+/* Café & Pedra: low-contrast warm stone dark palette with muted olive & terracotta */
 .dark {
-  --background: #020617;
-  --foreground: #f1f5f9;
+  --background: #181715;
+  --foreground: #e6e2da;
   color-scheme: dark;
+
+  /* Warm espresso & stone neutral scale */
+  --color-slate-950: #181715;
+  --color-slate-900: #211f1c;
+  --color-slate-800: #2d2a25;
+  --color-slate-700: #3d3932;
+  --color-slate-600: #554f47;
+  --color-slate-500: #777066;
+  --color-slate-400: #a39c92;
+  --color-slate-300: #cbc5bc;
+  --color-slate-200: #dcd7ce;
+  --color-slate-100: #e6e2da;
+  --color-slate-50: #f0ece5;
+
+  /* Muted earthy olive green */
+  --color-emerald-950: #212e24;
+  --color-emerald-900: #283f2f;
+  --color-emerald-800: #304e39;
+  --color-emerald-700: #3e6b4c;
+  --color-emerald-600: #4a7d5a;
+  --color-emerald-500: #699f77;
+  --color-emerald-400: #7eb88c;
+  --color-emerald-300: #99c7a4;
+  --color-emerald-200: #b8d8c0;
+  --color-emerald-100: #d6e9db;
+  --color-emerald-50: #edf5ef;
+
+  /* Muted clay / terracotta red */
+  --color-rose-950: #312220;
+  --color-rose-900: #482b27;
+  --color-rose-800: #59332e;
+  --color-rose-700: #914d44;
+  --color-rose-600: #a85c52;
+  --color-rose-500: #c4766a;
+  --color-rose-400: #d4887c;
+  --color-rose-300: #dfa197;
+  --color-rose-200: #eabeb7;
+  --color-rose-100: #f3dad6;
+  --color-rose-50: #faf0ee;
+
+  /* Softened supporting accents for dark mode harmony */
+  --color-amber-950: #30281b;
+  --color-amber-900: #473923;
+  --color-amber-800: #5c492a;
+  --color-amber-700: #82622d;
+  --color-amber-600: #9c7738;
+  --color-amber-500: #be944d;
+  --color-amber-400: #d2ab67;
+  --color-amber-300: #dfc088;
+  --color-amber-200: #ebd4ab;
+  --color-amber-100: #f4e6cc;
+
+  --color-sky-950: #1e2a30;
+  --color-sky-900: #253842;
+  --color-sky-800: #304c5a;
+  --color-sky-700: #3f667a;
+  --color-sky-600: #4c778c;
+  --color-sky-500: #6491a7;
+  --color-sky-400: #7da9bf;
+  --color-sky-300: #95bccf;
+
+  --color-indigo-950: #232236;
+  --color-indigo-900: #2f2e4b;
+  --color-indigo-800: #3d3c63;
+  --color-indigo-700: #515080;
+  --color-indigo-600: #6968a3;
+  --color-indigo-500: #8584bd;
+  --color-indigo-400: #9a99cc;
+  --color-indigo-300: #b2b1dc;
+
+  --color-violet-950: #292331;
+  --color-violet-900: #382e45;
+  --color-violet-800: #4a3d5d;
+  --color-violet-700: #62507d;
+  --color-violet-600: #7c679c;
+  --color-violet-500: #9580b4;
+  --color-violet-400: #ae9bc9;
+  --color-violet-300: #c3b4d9;
 }
 
 html,

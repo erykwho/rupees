@@ -25,12 +25,12 @@ import {
   computeNextRebalanceAssets,
 } from "@/lib/domain/calculations";
 import {
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   type AssetClassKey,
   type PortfolioSummary,
   formatBRL,
   formatPct,
+  getAssetClassColor,
   isVariableIncomeClass,
 } from "@/lib/domain/types";
 import { CompactKpiStrip } from "@/components/compact-kpi-strip";
@@ -87,9 +87,9 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
   const tooltipContentStyle = isDark
     ? {
         borderRadius: "12px",
-        border: "1px solid #1e293b",
-        backgroundColor: "#0f172a",
-        color: "#f1f5f9",
+        border: "1px solid #35312c",
+        backgroundColor: "#211f1c",
+        color: "#e6e2da",
         fontSize: "12px",
       }
     : {
@@ -264,8 +264,10 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                           <span
                             className="h-1.5 w-1.5 rounded-full"
                             style={{
-                              backgroundColor:
-                                ASSET_CLASS_COLORS[asset.assetClass],
+                              backgroundColor: getAssetClassColor(
+                                asset.assetClass,
+                                isDark
+                              ),
                             }}
                           />
                           {ASSET_CLASS_LABELS[asset.assetClass]}
@@ -341,16 +343,19 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                       innerRadius={44}
                       outerRadius={76}
                       paddingAngle={2}
-                      stroke={isDark ? "#0f172a" : "#ffffff"}
+                      stroke={isDark ? "#211f1c" : "#ffffff"}
                     >
                       {classDistribution.map((entry) => (
-                        <Cell key={entry.assetClass} fill={entry.color} />
+                        <Cell
+                          key={entry.assetClass}
+                          fill={getAssetClassColor(entry.assetClass, isDark)}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
                       formatter={(value) => maskBRL(Number(value), isPrivate)}
                       contentStyle={tooltipContentStyle}
-                      itemStyle={{ color: isDark ? "#e2e8f0" : "#0f172a" }}
+                      itemStyle={{ color: isDark ? "#e6e2da" : "#0f172a" }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -369,7 +374,12 @@ export function DashboardView({ initialSummary }: DashboardViewProps) {
                       <span className="flex min-w-0 items-center gap-2 text-slate-700 dark:text-slate-300">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: item.color }}
+                          style={{
+                            backgroundColor: getAssetClassColor(
+                              item.assetClass,
+                              isDark
+                            ),
+                          }}
                         />
                         <span className="truncate font-medium">
                           {item.label}

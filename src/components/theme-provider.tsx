@@ -67,7 +67,7 @@ function applyThemeToDOM(theme: Theme) {
   if (metaThemeColor) {
     metaThemeColor.setAttribute(
       "content",
-      theme === "dark" ? "#0f172a" : "#059669"
+      theme === "dark" ? "#181715" : "#059669"
     );
   }
 }

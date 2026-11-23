@@ -7,15 +7,16 @@ import {
   computeHierarchyForGoal,
 } from "@/lib/domain/calculations";
 import {
-  ASSET_CLASS_COLORS,
   ASSET_CLASS_LABELS,
   INVESTMENT_CLASSES,
   VARIABLE_INCOME_CLASSES,
   type GoalInput,
   type PortfolioSummary,
   formatPct,
+  getAssetClassColor,
 } from "@/lib/domain/types";
 import { SectorGoalsSection } from "@/components/sector-goals-section";
+import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 interface GoalsEditorProps {
@@ -73,6 +74,8 @@ const PAIRS: PairConfig[] = [
 ];
 
 export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [activeTab, setActiveTab] = useState<"CLASSES" | "SETORES">("CLASSES");
   const [goal, setGoal] = useState<GoalInput>(initialGoal);
   const [saving, setSaving] = useState(false);
@@ -349,7 +352,7 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
                       <span className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200">
                         <span
                           className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: ASSET_CLASS_COLORS[cls] }}
+                          style={{ backgroundColor: getAssetClassColor(cls, isDark) }}
                         />
                         {ASSET_CLASS_LABELS[cls]}
                       </span>
@@ -384,7 +387,7 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
                         className="h-full rounded-full transition-all"
                         style={{
                           width: `${Math.min(100, Math.max(0, actual))}%`,
-                          backgroundColor: ASSET_CLASS_COLORS[cls],
+                          backgroundColor: getAssetClassColor(cls, isDark),
                         }}
                       />
                       {target > 0 && target <= 100 && maxScale > 0 && (

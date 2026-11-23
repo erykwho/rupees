@@ -435,8 +435,10 @@ export function FixedIncomeProjectionView({
     }
   }
 
-  const chartGridColor = isDark ? "#1e293b" : "#f1f5f9";
-  const chartTickColor = isDark ? "#94a3b8" : "#64748b";
+  const chartGridColor = isDark ? "#2d2a25" : "#f1f5f9";
+  const chartTickColor = isDark ? "#a39c92" : "#64748b";
+  const netStrokeColor = isDark ? "#7eb88c" : "#10b981";
+  const baseStrokeColor = isDark ? "#8c8478" : "#94a3b8";
 
   if (projection.assets.length === 0) {
     return (
@@ -733,8 +735,16 @@ export function FixedIncomeProjectionView({
             >
               <defs>
                 <linearGradient id="fiNetGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                  <stop
+                    offset="5%"
+                    stopColor={netStrokeColor}
+                    stopOpacity={0.28}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={netStrokeColor}
+                    stopOpacity={0.02}
+                  />
                 </linearGradient>
               </defs>
               <CartesianGrid
@@ -774,7 +784,7 @@ export function FixedIncomeProjectionView({
                 type="monotone"
                 dataKey="netValueBRL"
                 name="Líquido"
-                stroke="#10b981"
+                stroke={netStrokeColor}
                 strokeWidth={2.25}
                 fill="url(#fiNetGrad)"
                 isAnimationActive={
@@ -785,7 +795,7 @@ export function FixedIncomeProjectionView({
                 type="monotone"
                 dataKey="principalBRL"
                 name="Base"
-                stroke="#94a3b8"
+                stroke={baseStrokeColor}
                 strokeWidth={1.5}
                 strokeDasharray="4 4"
                 fill="none"
