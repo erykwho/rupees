@@ -6,7 +6,6 @@ import {
   AlertCircle,
   Check,
   CheckCircle2,
-  Layers,
   Pencil,
   Plus,
   Trash2,
@@ -79,7 +78,8 @@ export function SectorGoalsSection({
         0
       );
       const hasCoverageIssue = sectorsInCls.some(
-        (s) => s.status === "UNCOVERED" || s.status === "UNDER" || s.status === "OVER"
+        (s) =>
+          s.status === "UNCOVERED" || s.status === "UNDER" || s.status === "OVER"
       );
       const hasSumIssue = sectorsInCls.length > 0 && Math.abs(sum - 100) > 0.05;
       map.set(cls, hasCoverageIssue || hasSumIssue);
@@ -148,7 +148,7 @@ export function SectorGoalsSection({
 
       setNewName("");
       setNewTargetPct("");
-      setFeedback(`Setor "${trimmed}" adicionado em ${ASSET_CLASS_LABELS[selectedClass]}.`);
+      setFeedback(`Setor "${trimmed}" adicionado.`);
       await reloadSummary();
     } finally {
       setCreating(false);
@@ -207,7 +207,7 @@ export function SectorGoalsSection({
           ? `: ${sector.assetTickers.join(", ")}`
           : "";
       setError(
-        `Não é possível excluir "${sector.sector}" pois há ${sector.totalAssetCount} ativo${sector.totalAssetCount === 1 ? "" : "s"} vinculado${sector.totalAssetCount === 1 ? "" : "s"}${tickersText}. Reatribua na Carteira antes de excluir.`
+        `Não é possível excluir "${sector.sector}" (${sector.totalAssetCount} ${sector.totalAssetCount === 1 ? "ativo" : "ativos"}${tickersText}). Reatribua na Carteira antes.`
       );
       return;
     }
@@ -237,7 +237,7 @@ export function SectorGoalsSection({
   function renderStatusBadge(s: SectorSummary) {
     if (s.status === "UNCOVERED") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:ring-rose-900">
+        <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
           Sem ativos
         </span>
       );
@@ -245,299 +245,279 @@ export function SectorGoalsSection({
     if (s.status === "UNDER") {
       const missing = Math.abs(s.diffFromGoalPct ?? 0);
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:ring-amber-900">
-          Faltam {formatPct(missing, 1)}
+        <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+          -{formatPct(missing, 1)}
         </span>
       );
     }
     if (s.status === "OVER") {
       const excess = Math.abs(s.diffFromGoalPct ?? 0);
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 dark:bg-sky-950/60 dark:text-sky-300 dark:ring-sky-900">
+        <span className="rounded-full bg-sky-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
           +{formatPct(excess, 1)}
         </span>
       );
     }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-900">
-        OK
-      </span>
-    );
+    return null;
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Layers className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Objetivos por Setor
-            </h2>
-          </div>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-            Defina a meta de cada setor dentro das classes de Renda Variável e
-            acompanhe se todos possuem ativos alocados.
-          </p>
-        </div>
-
-        {/* Class tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {VARIABLE_INCOME_CLASSES.map((cls) => {
-            const active = selectedClass === cls;
-            const hasIssue = classIssueMap.get(cls);
-            return (
-              <button
-                key={cls}
-                type="button"
-                onClick={() => {
-                  setSelectedClass(cls);
-                  cancelEdit();
-                  setError(null);
-                  setFeedback(null);
+    <section className="space-y-4">
+      {/* Single-Row Class Selector */}
+      <div className="grid w-full grid-cols-4 gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-2xs sm:inline-flex sm:w-auto dark:border-slate-800 dark:bg-slate-900">
+        {VARIABLE_INCOME_CLASSES.map((cls) => {
+          const active = selectedClass === cls;
+          const hasIssue = classIssueMap.get(cls);
+          return (
+            <button
+              key={cls}
+              type="button"
+              onClick={() => {
+                setSelectedClass(cls);
+                cancelEdit();
+                setError(null);
+                setFeedback(null);
+              }}
+              className={cn(
+                "relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors sm:px-3",
+                active
+                  ? "bg-emerald-600 text-white"
+                  : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              )}
+            >
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  backgroundColor: active
+                    ? "#ffffff"
+                    : ASSET_CLASS_COLORS[cls],
                 }}
-                className={cn(
-                  "relative inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
-                  active
-                    ? "bg-emerald-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                )}
-              >
+              />
+              <span>{ASSET_CLASS_LABELS[cls]}</span>
+              {hasIssue && (
                 <span
-                  className="h-2 w-2 rounded-full"
-                  style={{
-                    backgroundColor: active
-                      ? "#ffffff"
-                      : ASSET_CLASS_COLORS[cls],
-                  }}
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    active ? "bg-amber-200" : "bg-amber-500"
+                  )}
+                  title="Pendências nesta classe"
                 />
-                {ASSET_CLASS_LABELS[cls]}
-                {hasIssue && (
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      active ? "bg-amber-200" : "bg-amber-500"
-                    )}
-                    title="Há ajustes pendentes nesta classe"
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Class sum status bar */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/50">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-slate-600 dark:text-slate-300">
-            Soma dos setores ({ASSET_CLASS_LABELS[selectedClass]}):
-          </span>
-          <span className="font-mono font-bold text-slate-900 tabular-nums dark:text-slate-100">
-            {formatPct(sectorSum, 2)}
-          </span>
-          {classSectors.length === 0 ? (
-            <span className="text-slate-400 dark:text-slate-500">
-              · Nenhum setor cadastrado
+      {/* Main Sector List Card */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+        {/* Compact Sum Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-xs dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-500 dark:text-slate-400">
+              Soma:
             </span>
-          ) : isSumExact ? (
-            <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Fecha em 100%
+            <span className="font-mono font-bold text-slate-900 tabular-nums dark:text-slate-100">
+              {formatPct(sectorSum, 1)}
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
-              <AlertCircle className="h-3.5 w-3.5" />
-              {sumDiff < 0
-                ? `Faltam ${formatPct(Math.abs(sumDiff), 2)}`
-                : `Excede ${formatPct(sumDiff, 2)}`}
-            </span>
+            {classSectors.length > 0 &&
+              (isSumExact ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {sumDiff < 0
+                    ? `Faltam ${formatPct(Math.abs(sumDiff), 1)}`
+                    : `+${formatPct(sumDiff, 1)}`}
+                </span>
+              ))}
+          </div>
+
+          {uncoveredCount > 0 && (
+            <Link
+              href="/carteira"
+              className="font-semibold text-rose-600 hover:underline dark:text-rose-400"
+            >
+              {uncoveredCount} sem ativos →
+            </Link>
           )}
         </div>
 
-        {uncoveredCount > 0 && (
-          <Link
-            href="/carteira"
-            className="font-semibold text-rose-600 hover:underline dark:text-rose-400"
-          >
-            {uncoveredCount} setor{uncoveredCount === 1 ? "" : "es"} sem ativos →
-          </Link>
+        {error && (
+          <div className="mx-4 mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300">
+            {error}
+          </div>
         )}
-      </div>
 
-      {error && (
-        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-300">
-          {error}
-        </div>
-      )}
+        {feedback && (
+          <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            {feedback}
+          </div>
+        )}
 
-      {feedback && (
-        <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-medium text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          {feedback}
-        </div>
-      )}
+        {/* Mobile-Friendly Sector List with Real vs Target Bars */}
+        {classSectors.length > 0 ? (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+            {classSectors.map((sector) => {
+              const isEditing = editingId === sector.id;
+              const goalPct = sector.goalTargetPct ?? 0;
+              const actualPct = sector.actualPctInClass;
+              const statusBadge = renderStatusBadge(sector);
 
-      {/* Sectors Table / List */}
-      {classSectors.length > 0 ? (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:border-slate-800 dark:text-slate-500">
-                <th className="py-2 pr-3">Setor</th>
-                <th className="px-2 py-2 text-right">% Alvo</th>
-                <th className="px-2 py-2 text-right">% em Ativos</th>
-                <th className="px-2 py-2 text-center">Status</th>
-                <th className="py-2 pl-2 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {classSectors.map((sector) => {
-                const isEditing = editingId === sector.id;
-                return (
-                  <tr
-                    key={sector.id ?? sector.sector}
-                    className="group hover:bg-slate-50/70 dark:hover:bg-slate-800/30"
-                  >
-                    <td className="py-2.5 pr-3">
-                      {isEditing ? (
+              return (
+                <div
+                  key={sector.id ?? sector.sector}
+                  className="px-4 py-3 transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/30"
+                >
+                  {isEditing ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        aria-label="Nome do setor"
+                        className="min-w-0 flex-1 rounded-lg border border-emerald-400 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 focus:outline-none dark:bg-slate-800 dark:text-slate-100"
+                      />
+                      <div className="inline-flex items-center gap-1">
                         <input
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          className="w-full min-w-36 rounded-lg border border-emerald-400 bg-white px-2.5 py-1 text-xs font-medium text-slate-900 focus:outline-none dark:bg-slate-800 dark:text-slate-100"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          aria-label="Meta do setor"
+                          value={editTargetPct}
+                          onChange={(e) => setEditTargetPct(e.target.value)}
+                          className="w-16 rounded-lg border border-emerald-400 bg-white px-2 py-1.5 text-right font-mono text-xs font-bold text-slate-900 focus:outline-none dark:bg-slate-800 dark:text-slate-100"
                         />
-                      ) : (
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
+                        <span className="text-xs text-slate-400">%</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => sector.id && handleSaveEdit(sector.id)}
+                        disabled={savingId === sector.id}
+                        className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-60"
+                        title="Salvar"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        title="Cancelar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
                             {sector.sector}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
-                            {sector.activeAssetCount > 0 ? (
-                              <>
-                                {sector.activeAssetCount} ativo
-                                {sector.activeAssetCount === 1 ? "" : "s"}:{" "}
-                                <span className="font-mono text-slate-500 dark:text-slate-400">
-                                  {sector.assetTickers.join(", ")}
-                                </span>
-                              </>
-                            ) : (
-                              "Nenhum ativo alocado"
-                            )}
-                          </p>
+                          </span>
+                          {statusBadge}
                         </div>
-                      )}
-                    </td>
 
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums">
-                      {isEditing ? (
-                        <div className="inline-flex items-center gap-1">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            value={editTargetPct}
-                            onChange={(e) => setEditTargetPct(e.target.value)}
-                            className="w-20 rounded-lg border border-emerald-400 bg-white px-2 py-1 text-right font-mono text-xs font-bold text-slate-900 focus:outline-none dark:bg-slate-800 dark:text-slate-100"
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="font-mono text-xs tabular-nums">
+                            <strong className="font-semibold text-slate-900 dark:text-slate-100">
+                              {formatPct(actualPct, 1)}
+                            </strong>
+                            <span className="ml-1 text-[11px] text-slate-400 dark:text-slate-500">
+                              / {formatPct(goalPct, 1)}
+                            </span>
+                          </span>
+                          <div className="inline-flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => startEdit(sector)}
+                              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                              title="Editar setor"
+                              aria-label={`Editar ${sector.sector}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(sector)}
+                              disabled={deletingId === sector.id}
+                              className={cn(
+                                "rounded-lg p-1 transition-colors disabled:opacity-60",
+                                sector.totalAssetCount > 0
+                                  ? "text-slate-300 hover:bg-slate-100 hover:text-amber-600 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-amber-400"
+                                  : "text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
+                              )}
+                              title={
+                                sector.totalAssetCount > 0
+                                  ? "Possui ativos vinculados"
+                                  : "Excluir setor"
+                              }
+                              aria-label={`Excluir ${sector.sector}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Real vs Target Bar */}
+                      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, actualPct))}%`,
+                            backgroundColor: ASSET_CLASS_COLORS[selectedClass],
+                          }}
+                        />
+                        {goalPct > 0 && goalPct <= 100 && (
+                          <span
+                            title={`Meta: ${formatPct(goalPct, 1)}`}
+                            className="absolute inset-y-0 w-0.5 bg-slate-900/75 dark:bg-white/80"
+                            style={{ left: `${Math.min(99.5, goalPct)}%` }}
                           />
-                          <span className="text-slate-400">%</span>
-                        </div>
-                      ) : (
-                        <span className="font-bold text-slate-900 dark:text-slate-100">
-                          {formatPct(sector.goalTargetPct ?? 0, 1)}
+                        )}
+                      </div>
+
+                      {/* Tickers & asset target info */}
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                        <span className="truncate font-mono">
+                          {sector.activeAssetCount > 0
+                            ? sector.assetTickers.join(", ")
+                            : "Nenhum ativo"}
                         </span>
-                      )}
-                    </td>
+                        {Math.abs(sector.targetPctInClass - goalPct) > 0.05 && (
+                          <span className="shrink-0 font-mono tabular-nums">
+                            Ativos: {formatPct(sector.targetPctInClass, 1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-4 py-8 text-center text-xs text-slate-400 dark:text-slate-500">
+            Nenhum setor cadastrado em{" "}
+            <strong>{ASSET_CLASS_LABELS[selectedClass]}</strong>.
+          </div>
+        )}
 
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                      {formatPct(sector.targetPctInClass, 1)}
-                    </td>
-
-                    <td className="px-2 py-2.5 text-center">
-                      {renderStatusBadge(sector)}
-                    </td>
-
-                    <td className="py-2.5 pl-2 text-right">
-                      {isEditing ? (
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => sector.id && handleSaveEdit(sector.id)}
-                            disabled={savingId === sector.id}
-                            className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            title="Salvar"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                            title="Cancelar"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(sector)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                            title="Editar setor"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(sector)}
-                            disabled={deletingId === sector.id}
-                            className={cn(
-                              "rounded-lg p-1.5 transition-colors disabled:opacity-60",
-                              sector.totalAssetCount > 0
-                                ? "text-slate-300 hover:bg-slate-100 hover:text-amber-600 dark:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-amber-400"
-                                : "text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 dark:hover:text-rose-400"
-                            )}
-                            title={
-                              sector.totalAssetCount > 0
-                                ? "Possui ativos vinculados"
-                                : "Excluir setor"
-                            }
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="mt-4 rounded-xl border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
-          Nenhum objetivo de setor cadastrado para{" "}
-          <strong>{ASSET_CLASS_LABELS[selectedClass]}</strong> ainda. Adicione o
-          primeiro abaixo.
-        </div>
-      )}
-
-      {/* Add new sector form */}
-      <form
-        onSubmit={handleCreate}
-        className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center dark:border-slate-800"
-      >
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder={`Novo setor em ${ASSET_CLASS_LABELS[selectedClass]} (ex: Transporte, Logística...)`}
-          className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
-        />
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
+        {/* Add New Sector Form */}
+        <form
+          onSubmit={handleCreate}
+          className="flex items-center gap-2 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/30"
+        >
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder={`Novo setor em ${ASSET_CLASS_LABELS[selectedClass]}...`}
+            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+          />
+          <div className="flex shrink-0 items-center gap-1">
             <input
               type="number"
               step="0.01"
@@ -545,21 +525,21 @@ export function SectorGoalsSection({
               max="100"
               value={newTargetPct}
               onChange={(e) => setNewTargetPct(e.target.value)}
-              placeholder="Meta %"
-              className="w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-right font-mono text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+              placeholder="%"
+              className="w-16 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right font-mono text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
-            <span className="text-xs font-semibold text-slate-400">%</span>
+            <button
+              type="submit"
+              disabled={creating}
+              aria-label="Adicionar setor"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-60"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Adicionar</span>
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-60"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {creating ? "Adicionando..." : "Adicionar"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </section>
   );
 }

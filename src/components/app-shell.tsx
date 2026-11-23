@@ -13,7 +13,6 @@ import {
   LogOut,
   Menu,
   PieChart,
-  RefreshCw,
   Shield,
   Target,
   TrendingUp,
@@ -157,7 +156,7 @@ export function AppShell({
           window.location.replace(`/unlock${nextParam}`);
         }
       } catch {
-        // Ignora falhas transitórias de rede ao retomar do background
+        // Ignore transient network errors when resuming from background
       } finally {
         checking = false;
       }
@@ -230,11 +229,6 @@ export function AppShell({
     if (deltaX < -56 && Math.abs(deltaX) > Math.abs(deltaY)) {
       setMobileMenuOpen(false);
     }
-  }
-
-  function handleManualReload() {
-    setMobileMenuOpen(false);
-    window.location.reload();
   }
 
   const renderNavLinks = (options?: {
@@ -364,14 +358,9 @@ export function AppShell({
           >
             <BrandLogo />
             {!desktopCollapsed && (
-              <div className="min-w-0">
-                <span className="block truncate text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                  Rupees
-                </span>
-                <p className="truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  Controle de Investimentos
-                </p>
-              </div>
+              <span className="truncate text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Rupees
+              </span>
             )}
           </Link>
           {!desktopCollapsed && (
@@ -441,17 +430,12 @@ export function AppShell({
             <Link
               href="/"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center gap-3"
+              className="flex items-center gap-2.5"
             >
               <BrandLogo />
-              <div>
-                <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                  Rupees
-                </span>
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                  Controle de Investimentos
-                </p>
-              </div>
+              <span className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Rupees
+              </span>
             </Link>
 
             <button
@@ -470,17 +454,6 @@ export function AppShell({
           >
             {renderNavLinks({ onNavigate: () => setMobileMenuOpen(false) })}
           </nav>
-
-          <div className="px-3 pb-3">
-            <button
-              type="button"
-              onClick={handleManualReload}
-              className="flex w-full items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            >
-              <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Atualizar aplicativo
-            </button>
-          </div>
 
           <div className="pb-safe border-t border-slate-200/80 px-4 pt-4 dark:border-slate-800">
             {userFooter}
@@ -523,7 +496,7 @@ export function AppShell({
         )}
       >
         <PullToRefresh disabled={mobileMenuOpen}>
-          <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
             {children}
           </div>
         </PullToRefresh>

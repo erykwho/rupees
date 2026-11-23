@@ -274,33 +274,32 @@ export function TransactionsManager({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
             Lançamentos
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Histórico completo de compras, vendas e ajustes de saldo (
-            {transactions.length} registros).
-          </p>
+          <span className="font-mono text-xs font-medium text-slate-400 tabular-nums dark:text-slate-500">
+            {transactions.length}
+          </span>
         </div>
 
         <button
           type="button"
           onClick={openCreateModal}
           disabled={assets.length === 0}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-emerald-700 disabled:opacity-50"
         >
-          <Plus className="h-4 w-4" />
-          Novo lançamento
+          <Plus className="h-3.5 w-3.5" />
+          <span>Novo</span>
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1.5">
+      {/* Compact Filters */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid w-full grid-cols-4 rounded-xl bg-slate-100 p-0.5 sm:inline-flex sm:w-auto dark:bg-slate-800">
           {(
             [
               ["ALL", "Todos"],
@@ -314,10 +313,10 @@ export function TransactionsManager({
               type="button"
               onClick={() => setTypeFilter(key)}
               className={cn(
-                "rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
+                "whitespace-nowrap rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition-colors sm:px-3",
                 typeFilter === key
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                  : "bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-700 dark:text-slate-100"
+                  : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
               )}
             >
               {label}
@@ -325,14 +324,14 @@ export function TransactionsManager({
           ))}
         </div>
 
-        <div className="relative sm:w-64">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+        <div className="relative sm:w-60">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filtrar por ticker ou nota..."
-            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+            placeholder="Buscar ticker ou nota..."
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
         </div>
       </div>
@@ -827,9 +826,9 @@ export function TransactionsManager({
               {showFixedIncomeRateInput && (
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Taxa contratada do lote (%) — opcional
+                    Taxa do lote (%)
                     {selectedAsset?.fixedIncomeIndex
-                      ? ` (${FIXED_INCOME_INDEX_LABELS[selectedAsset.fixedIncomeIndex]})`
+                      ? ` · ${FIXED_INCOME_INDEX_LABELS[selectedAsset.fixedIncomeIndex]}`
                       : ""}
                   </label>
                   <input
@@ -841,8 +840,8 @@ export function TransactionsManager({
                     }
                     placeholder={
                       selectedAsset?.fixedIncomeRate != null
-                        ? `Padrão do ativo: ${selectedAsset.fixedIncomeRate}%`
-                        : "Deixe em branco para usar a taxa padrão do ativo"
+                        ? `Padrão: ${selectedAsset.fixedIncomeRate}%`
+                        : "Opcional"
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                   />
@@ -851,13 +850,13 @@ export function TransactionsManager({
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Observação (opcional)
+                  Observação
                 </label>
                 <input
                   type="text"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Ex: Aporte mensal, reinvestimento..."
+                  placeholder="Opcional"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               </div>
@@ -875,7 +874,7 @@ export function TransactionsManager({
                   disabled={saving}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {saving ? "Salvando..." : "Salvar lançamento"}
+                  {saving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </form>

@@ -7,9 +7,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
   History,
-  Info,
   Layers,
   Loader2,
   PieChart,
@@ -41,7 +39,7 @@ const ENTITY_FILTER_OPTIONS: Array<{
   value: AuditEntityTypeKey | "ALL";
   label: string;
 }> = [
-  { value: "ALL", label: "Todos" },
+  { value: "ALL", label: "Todos módulos" },
   { value: "ASSET", label: "Carteira" },
   { value: "TRANSACTION", label: "Lançamentos" },
   { value: "GOAL", label: "Objetivos" },
@@ -69,13 +67,13 @@ function getEntityIcon(entityType: AuditEntityTypeKey) {
 function getActionBadgeClass(action: AuditActionKey): string {
   switch (action) {
     case "CREATE":
-      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/60 dark:text-emerald-300 dark:ring-emerald-900";
+      return "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300";
     case "UPDATE":
-      return "bg-sky-50 text-sky-700 ring-1 ring-sky-200/80 dark:bg-sky-950/60 dark:text-sky-300 dark:ring-sky-900";
+      return "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300";
     case "DELETE":
-      return "bg-rose-50 text-rose-700 ring-1 ring-rose-200/80 dark:bg-rose-950/60 dark:text-rose-300 dark:ring-rose-900";
+      return "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300";
     case "REVERT":
-      return "bg-amber-50 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:ring-amber-900";
+      return "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300";
   }
 }
 
@@ -129,8 +127,12 @@ export function EventsTimeline({
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [totalCount, setTotalCount] = useState<number>(initialTotalCount);
 
-  const [entityFilter, setEntityFilter] = useState<AuditEntityTypeKey | "ALL">("ALL");
-  const [actionFilter, setActionFilter] = useState<AuditActionKey | "ALL">("ALL");
+  const [entityFilter, setEntityFilter] = useState<AuditEntityTypeKey | "ALL">(
+    "ALL"
+  );
+  const [actionFilter, setActionFilter] = useState<AuditActionKey | "ALL">(
+    "ALL"
+  );
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -224,7 +226,7 @@ export function EventsTimeline({
       setConfirmEvent(null);
       setFeedback({
         type: "success",
-        message: `Evento de "${label}" revertido com sucesso.`,
+        message: `"${label}" revertido com sucesso.`,
       });
       await fetchEvents({ append: false });
     } catch (err) {
@@ -241,17 +243,20 @@ export function EventsTimeline({
     }
   }
 
-  function toggleExpanded(eventId: string, defaultExpanded: boolean) {
-    setExpandedIds((prev) => {
-      const current = prev[eventId] ?? defaultExpanded;
-      return { ...prev, [eventId]: !current };
-    });
+  function toggleExpanded(eventId: string) {
+    setExpandedIds((prev) => ({ ...prev, [eventId]: !prev[eventId] }));
   }
 
   const groupedEvents = useMemo(() => {
-    const groups: Array<{ dayKey: string; label: string; items: AuditEventDTO[] }> =
-      [];
-    const map = new Map<string, { dayKey: string; label: string; items: AuditEventDTO[] }>();
+    const groups: Array<{
+      dayKey: string;
+      label: string;
+      items: AuditEventDTO[];
+    }> = [];
+    const map = new Map<
+      string,
+      { dayKey: string; label: string; items: AuditEventDTO[] }
+    >();
 
     for (const ev of events) {
       const dayKey = new Date(ev.createdAt).toLocaleDateString("en-CA");
@@ -273,7 +278,7 @@ export function EventsTimeline({
 
   const confirmDiffs = useMemo(() => {
     if (!confirmEvent) return [];
-    // Preview invertido: o que está agora (afterState) volta a ser beforeState
+    // Inverted preview: current state (afterState) reverts to beforeState
     return computeAuditDiffs(
       confirmEvent.entityType,
       confirmEvent.afterState,
@@ -283,39 +288,32 @@ export function EventsTimeline({
   }, [confirmEvent, isPrivate]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-              Eventos
-            </h1>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              {totalCount} {totalCount === 1 ? "registro" : "registros"}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Histórico completo de alterações na carteira, lançamentos e objetivos, com reversão segura.
-          </p>
-        </div>
+    <div className="space-y-4 sm:space-y-5">
+      {/* Compact Header */}
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
+          Eventos
+        </h1>
+        <span className="font-mono text-xs font-medium text-slate-400 tabular-nums dark:text-slate-500">
+          {totalCount}
+        </span>
       </div>
 
       {/* Feedback Banner */}
       {feedback && (
         <div
           className={cn(
-            "flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm",
+            "flex items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium",
             feedback.type === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/80 dark:bg-emerald-950/40 dark:text-emerald-300"
               : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/80 dark:bg-rose-950/40 dark:text-rose-300"
           )}
         >
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-center gap-2">
             {feedback.type === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
             ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <AlertCircle className="h-4 w-4 shrink-0" />
             )}
             <span>{feedback.message}</span>
           </div>
@@ -323,107 +321,103 @@ export function EventsTimeline({
             type="button"
             onClick={() => setFeedback(null)}
             aria-label="Fechar aviso"
-            className="rounded-lg p-1 opacity-70 transition-opacity hover:opacity-100"
+            className="rounded-lg p-1 opacity-70 hover:opacity-100"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      {/* Filter Bar */}
-      <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      {/* Compact Filter Bar: Search + 2 Native Selects */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por ticker ou descrição (ex.: PETR4, Objetivos)..."
-            className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2.5 pl-10 pr-9 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 dark:focus:border-emerald-500 dark:focus:bg-slate-900"
+            placeholder="Buscar ticker ou evento..."
+            className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-8 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Limpar busca"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-          {/* Module Pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {ENTITY_FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setEntityFilter(opt.value)}
-                className={cn(
-                  "rounded-xl px-3 py-1.5 text-xs font-medium transition-colors",
-                  entityFilter === opt.value
-                    ? "bg-emerald-600 text-white shadow-2xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+          <div className="relative">
+            <select
+              aria-label="Filtrar por módulo"
+              value={entityFilter}
+              onChange={(e) =>
+                setEntityFilter(e.target.value as AuditEntityTypeKey | "ALL")
+              }
+              className="h-9 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-7 text-xs font-semibold text-slate-700 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              {ENTITY_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+            />
           </div>
 
-          {/* Action Pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {ACTION_FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setActionFilter(opt.value)}
-                className={cn(
-                  "rounded-xl px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  actionFilter === opt.value
-                    ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                    : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-700"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="relative">
+            <select
+              aria-label="Filtrar por ação"
+              value={actionFilter}
+              onChange={(e) =>
+                setActionFilter(e.target.value as AuditActionKey | "ALL")
+              }
+              className="h-9 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-7 text-xs font-semibold text-slate-700 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              {ACTION_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+            />
           </div>
         </div>
       </div>
 
-      {/* Timeline */}
+      {/* Compact Log Timeline */}
       {loading ? (
-        <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white py-14 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-          <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
-          Carregando eventos...
+        <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200/80 bg-white py-12 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+          Carregando...
         </div>
       ) : groupedEvents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-14 text-center dark:border-slate-700 dark:bg-slate-900/50">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
-            <History className="h-6 w-6" />
-          </div>
-          <p className="mt-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900/50">
+          <History className="h-6 w-6 text-slate-400" />
+          <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Nenhum evento encontrado
-          </p>
-          <p className="mt-1 max-w-sm text-xs text-slate-500 dark:text-slate-400">
-            Ajuste os filtros ou realize alterações na carteira, nos lançamentos ou nos objetivos para vê-las registradas aqui.
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {groupedEvents.map((group) => (
-            <section key={group.dayKey} className="space-y-3">
-              <div className="flex items-center gap-3">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  {group.label}
-                </h2>
-                <div className="h-px flex-1 bg-slate-200/80 dark:bg-slate-800" />
-              </div>
+            <section key={group.dayKey} className="space-y-2">
+              <h2 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                {group.label}
+              </h2>
 
-              <div className="space-y-3">
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
                 {group.items.map((ev) => {
                   const Icon = getEntityIcon(ev.entityType);
                   const diffs = computeAuditDiffs(
@@ -440,148 +434,154 @@ export function EventsTimeline({
                     ev.afterState,
                     isPrivate
                   );
-                  const defaultExpanded =
-                    (ev.action === "UPDATE" || ev.action === "REVERT") &&
-                    diffs.length > 0 &&
-                    diffs.length <= 4;
-                  const isExpanded = expandedIds[ev.id] ?? defaultExpanded;
+                  const hasDetails =
+                    diffs.length > 0 ||
+                    (!ev.canRevert && Boolean(ev.cannotRevertReason));
+                  const isExpanded = Boolean(expandedIds[ev.id]);
 
                   return (
-                    <article
+                    <div
                       key={ev.id}
                       className={cn(
-                        "rounded-2xl border bg-white p-4 shadow-2xs transition-colors dark:bg-slate-900",
-                        ev.isReverted
-                          ? "border-slate-200/60 opacity-80 dark:border-slate-800/70"
-                          : "border-slate-200/80 dark:border-slate-800"
+                        "transition-colors",
+                        ev.isReverted && "opacity-75"
                       )}
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        {/* Left info */}
-                        <div className="flex min-w-0 items-start gap-3">
+                      <div
+                        role={hasDetails ? "button" : undefined}
+                        tabIndex={hasDetails ? 0 : undefined}
+                        aria-expanded={hasDetails ? isExpanded : undefined}
+                        onClick={
+                          hasDetails ? () => toggleExpanded(ev.id) : undefined
+                        }
+                        onKeyDown={
+                          hasDetails
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleExpanded(ev.id);
+                                }
+                              }
+                            : undefined
+                        }
+                        className={cn(
+                          "flex items-center justify-between gap-2.5 px-3.5 py-2.5",
+                          hasDetails &&
+                            "cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                        )}
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
                           <div
                             className={cn(
-                              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
                               getEntityIconBoxClass(ev.entityType)
                             )}
                           >
-                            <Icon className="h-4 w-4" />
+                            <Icon className="h-3.5 w-3.5" />
                           </div>
 
-                          <div className="min-w-0 flex-1 space-y-1">
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              <span className="truncate text-xs font-bold text-slate-900 dark:text-slate-100">
                                 {ev.entityLabel}
-                              </span>
-                              <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                {AUDIT_ENTITY_LABELS[ev.entityType]}
                               </span>
                               <span
                                 className={cn(
-                                  "rounded-md px-2 py-0.5 text-[11px] font-semibold",
+                                  "rounded px-1.5 py-0.5 text-[10px] font-semibold",
                                   getActionBadgeClass(ev.action)
                                 )}
                               >
                                 {AUDIT_ACTION_LABELS[ev.action]}
                               </span>
                               {ev.isReverted && (
-                                <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                                   Revertido
                                 </span>
                               )}
-                              <span className="text-xs text-slate-400 dark:text-slate-500">
-                                · {formatTime(ev.createdAt)}
+                              <span className="font-mono text-[10px] text-slate-400 tabular-nums dark:text-slate-500">
+                                {formatTime(ev.createdAt)}
                               </span>
                             </div>
-
-                            <p className="text-sm text-slate-600 dark:text-slate-300">
+                            <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                               {summary}
                             </p>
                           </div>
                         </div>
 
-                        {/* Right actions */}
-                        <div className="flex shrink-0 items-center gap-2 self-end sm:self-start">
-                          {diffs.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => toggleExpanded(ev.id, defaultExpanded)}
-                              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                            >
-                              {isExpanded ? (
-                                <>
-                                  Ocultar
-                                  <ChevronUp className="h-3.5 w-3.5" />
-                                </>
-                              ) : (
-                                <>
-                                  Detalhes ({diffs.length})
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                </>
-                              )}
-                            </button>
-                          )}
-
+                        <div className="flex shrink-0 items-center gap-1.5">
                           {ev.canRevert && (
                             <button
                               type="button"
-                              onClick={() => setConfirmEvent(ev)}
-                              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200/80 transition-colors hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 dark:ring-amber-900 dark:hover:bg-amber-950"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmEvent(ev);
+                              }}
+                              title="Reverter evento"
+                              className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 dark:hover:bg-amber-950"
                             >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                              Reverter
+                              <RotateCcw className="h-3 w-3" />
+                              <span className="hidden sm:inline">Reverter</span>
                             </button>
+                          )}
+                          {hasDetails && (
+                            <ChevronDown
+                              className={cn(
+                                "h-4 w-4 text-slate-400 transition-transform dark:text-slate-500",
+                                isExpanded && "rotate-180 text-emerald-600"
+                              )}
+                            />
                           )}
                         </div>
                       </div>
 
-                      {/* Diff details */}
-                      {isExpanded && diffs.length > 0 && (
-                        <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/50">
-                          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {diffs.map((field) => (
-                              <div
-                                key={field.key}
-                                className="flex flex-col gap-0.5 rounded-lg bg-white/80 px-2.5 py-1.5 text-xs dark:bg-slate-900/80"
-                              >
-                                <dt className="font-medium text-slate-500 dark:text-slate-400">
-                                  {field.label}
-                                </dt>
-                                <dd className="flex flex-wrap items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
-                                  {field.before !== null && field.after !== null ? (
-                                    <>
-                                      <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700 line-through decoration-rose-400/70 dark:bg-rose-950/50 dark:text-rose-300">
-                                        {field.before}
-                                      </span>
-                                      <ArrowRight className="h-3 w-3 shrink-0 text-slate-400" />
-                                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                      {/* Expanded Diffs & Optional Non-Revertible Reason */}
+                      {isExpanded && hasDetails && (
+                        <div className="border-t border-slate-100 bg-slate-50/70 px-3.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
+                          {diffs.length > 0 && (
+                            <dl className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                              {diffs.map((field) => (
+                                <div
+                                  key={field.key}
+                                  className="flex items-center justify-between gap-2 rounded-lg bg-white/90 px-2.5 py-1.5 text-xs dark:bg-slate-900/80"
+                                >
+                                  <dt className="font-medium text-slate-500 dark:text-slate-400">
+                                    {field.label}
+                                  </dt>
+                                  <dd className="flex items-center gap-1 font-mono text-[11px] font-medium">
+                                    {field.before !== null &&
+                                    field.after !== null ? (
+                                      <>
+                                        <span className="text-rose-600 line-through dark:text-rose-400">
+                                          {field.before}
+                                        </span>
+                                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                                        <span className="text-emerald-700 dark:text-emerald-400">
+                                          {field.after}
+                                        </span>
+                                      </>
+                                    ) : field.after !== null ? (
+                                      <span className="text-emerald-700 dark:text-emerald-400">
                                         {field.after}
                                       </span>
-                                    </>
-                                  ) : field.after !== null ? (
-                                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                                      {field.after}
-                                    </span>
-                                  ) : (
-                                    <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700 line-through decoration-rose-400/70 dark:bg-rose-950/50 dark:text-rose-300">
-                                      {field.before}
-                                    </span>
-                                  )}
-                                </dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </div>
-                      )}
+                                    ) : (
+                                      <span className="text-rose-600 line-through dark:text-rose-400">
+                                        {field.before}
+                                      </span>
+                                    )}
+                                  </dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
 
-                      {/* Why it cannot be reverted */}
-                      {!ev.canRevert && ev.cannotRevertReason && (
-                        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
-                          <Info className="h-3.5 w-3.5 shrink-0" />
-                          <span>{ev.cannotRevertReason}</span>
+                          {!ev.canRevert && ev.cannotRevertReason && (
+                            <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                              {ev.cannotRevertReason}
+                            </p>
+                          )}
                         </div>
                       )}
-                    </article>
+                    </div>
                   );
                 })}
               </div>
@@ -590,20 +590,22 @@ export function EventsTimeline({
 
           {/* Load More */}
           {nextCursor && (
-            <div className="flex justify-center pt-2">
+            <div className="flex justify-center pt-1">
               <button
                 type="button"
                 disabled={loadingMore}
-                onClick={() => void fetchEvents({ cursor: nextCursor, append: true })}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                onClick={() =>
+                  void fetchEvents({ cursor: nextCursor, append: true })
+                }
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 {loadingMore ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Carregando...
                   </>
                 ) : (
-                  "Carregar mais eventos"
+                  "Carregar mais"
                 )}
               </button>
             </div>
@@ -619,37 +621,31 @@ export function EventsTimeline({
           aria-modal="true"
           aria-labelledby="revert-modal-title"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
-                  <RotateCcw className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3
-                    id="revert-modal-title"
-                    className="text-base font-bold text-slate-900 dark:text-slate-100"
-                  >
-                    Confirmar reversão
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {confirmEvent.entityLabel} ·{" "}
-                    {AUDIT_ENTITY_LABELS[confirmEvent.entityType]}
-                  </p>
-                </div>
+              <div>
+                <h3
+                  id="revert-modal-title"
+                  className="text-base font-bold text-slate-900 dark:text-slate-100"
+                >
+                  Reverter {confirmEvent.entityLabel}?
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {AUDIT_ENTITY_LABELS[confirmEvent.entityType]}
+                </p>
               </div>
               <button
                 type="button"
                 disabled={reverting}
                 onClick={() => setConfirmEvent(null)}
                 aria-label="Fechar modal"
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
+            <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">
               {buildRevertDescription(
                 confirmEvent.entityType,
                 confirmEvent.beforeState,
@@ -658,19 +654,16 @@ export function EventsTimeline({
             </p>
 
             {confirmDiffs.length > 0 && (
-              <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  O que será aplicado
-                </p>
+              <div className="mt-3 max-h-52 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
                 {confirmDiffs.map((field) => (
                   <div
                     key={field.key}
                     className="flex flex-wrap items-center justify-between gap-2 text-xs"
                   >
-                    <span className="font-medium text-slate-600 dark:text-slate-400">
+                    <span className="font-medium text-slate-500 dark:text-slate-400">
                       {field.label}
                     </span>
-                    <span className="flex items-center gap-1.5 font-medium">
+                    <span className="flex items-center gap-1.5 font-mono text-[11px] font-medium">
                       {field.before !== null && field.after !== null ? (
                         <>
                           <span className="text-slate-500 line-through">
@@ -683,7 +676,7 @@ export function EventsTimeline({
                         </>
                       ) : field.after !== null ? (
                         <span className="text-emerald-700 dark:text-emerald-400">
-                          Restaurar: {field.after}
+                          {field.after}
                         </span>
                       ) : (
                         <span className="text-rose-700 dark:text-rose-400">
@@ -696,16 +689,12 @@ export function EventsTimeline({
               </div>
             )}
 
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              Um novo evento do tipo <strong>Reversão</strong> será registrado no histórico — você poderá desfazer esta reversão depois se precisar.
-            </p>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
                 disabled={reverting}
                 onClick={() => setConfirmEvent(null)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Cancelar
               </button>
@@ -713,17 +702,17 @@ export function EventsTimeline({
                 type="button"
                 disabled={reverting}
                 onClick={() => void handleConfirmRevert()}
-                className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white shadow-2xs transition-colors hover:bg-amber-700 disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-amber-700 disabled:opacity-60"
               >
                 {reverting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Revertendo...
                   </>
                 ) : (
                   <>
-                    <RotateCcw className="h-4 w-4" />
-                    Confirmar reversão
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reverter
                   </>
                 )}
               </button>
