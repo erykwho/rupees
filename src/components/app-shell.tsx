@@ -50,12 +50,10 @@ const NAV_ITEMS = [
   { href: "/seguranca", label: "Segurança", fullLabel: "Segurança", icon: Shield },
 ];
 
-const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(
-  (item) =>
-    item.href !== "/objetivos" &&
-    item.href !== "/eventos" &&
-    item.href !== "/seguranca"
-);
+const MOBILE_NAV_HREFS = ["/", "/aporte", "/evolucao"] as const;
+const MOBILE_NAV_ITEMS = MOBILE_NAV_HREFS.map((href) =>
+  NAV_ITEMS.find((item) => item.href === href)
+).filter((item): item is (typeof NAV_ITEMS)[number] => item !== undefined);
 const SIDEBAR_STORAGE_KEY = "rupees-sidebar-collapsed";
 const sidebarListeners = new Set<() => void>();
 
@@ -543,7 +541,7 @@ export function AppShell({
         aria-label="Navegação inferior"
         className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/90 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
       >
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-3">
           {MOBILE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active =
