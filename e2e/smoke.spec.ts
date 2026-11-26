@@ -33,6 +33,8 @@ test.describe("Rupees E2E Smoke Suite (Mobile PWA)", () => {
 
     for (const route of [
       "/",
+      "/mes",
+      "/caixinhas",
       "/carteira",
       "/lancamentos",
       "/aporte",
@@ -117,6 +119,8 @@ test.describe("Rupees E2E Smoke Suite (Mobile PWA)", () => {
       "/api/evolution",
       "/api/fixed-income",
       "/api/events",
+      "/api/savings",
+      "/api/monthly-budget",
       "/api/security/status",
     ]) {
       const res = await request.get(endpoint);

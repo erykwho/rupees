@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { authErrorResponse, requireUser } from "@/lib/auth";
 import { RevertConflictError, revertAuditEvent } from "@/lib/audit-service";
-import { invalidateUserFinancialCaches } from "@/lib/server-cache";
+import {
+  invalidateUserFinancialCaches,
+  invalidateUserSavingsCaches,
+} from "@/lib/server-cache";
 
 export async function POST(
   _request: Request,
@@ -12,7 +15,14 @@ export async function POST(
     const { id } = await context.params;
 
     const revertEvent = await revertAuditEvent(user.id, id);
-    invalidateUserFinancialCaches(user.id);
+    if (
+      revertEvent.entityType === "SAVINGS_GOAL" ||
+      revertEvent.entityType === "SAVINGS_MOVEMENT"
+    ) {
+      invalidateUserSavingsCaches(user.id);
+    } else {
+      invalidateUserFinancialCaches(user.id);
+    }
 
     return NextResponse.json(
       {

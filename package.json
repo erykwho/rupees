@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:import": "tsx prisma/import-sheets.ts",
+    "db:import:sheet": "tsx prisma/import-financial-sheet.ts",
     "db:fix-event-dates": "tsx prisma/fix-event-dates.ts",
     "db:cleanup-mar2025-reversals": "tsx prisma/cleanup-mar2025-reversals.ts"
   },

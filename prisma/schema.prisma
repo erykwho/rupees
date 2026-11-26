@@ -37,6 +37,8 @@ enum AuditEntityType {
   TRANSACTION
   GOAL
   SECTOR_GOAL
+  SAVINGS_GOAL
+  SAVINGS_MOVEMENT
 }
 
 enum AuditAction {
@@ -44,6 +46,27 @@ enum AuditAction {
   UPDATE
   DELETE
   REVERT
+}
+
+enum SavingsMovementType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_OUT
+  TRANSFER_IN
+  YIELD_ADJUSTMENT
+}
+
+enum MonthlyExpenseCategory {
+  BILL
+  VARIABLE
+  INVESTMENT
+  TAX
+}
+
+enum MonthlyAllocationKind {
+  LONG_TERM_DEPOSIT
+  SAVINGS_DEPOSIT
+  SAVINGS_WITHDRAWAL
 }
 
 enum FixedIncomeIndex {
@@ -62,25 +85,33 @@ enum TickerValidationStatus {
 }
 
 model User {
-  id                    String               @id @default(cuid())
-  email                 String               @unique
-  name                  String?
-  image                 String?
-  appLockEnabled        Boolean              @default(false)
-  appLockPinHash        String?
-  appLockTimeoutMinutes Int                  @default(30)
-  appLockRequirePinOnly Boolean              @default(false)
-  appLockFailedAttempts Int                  @default(0)
-  appLockLockedUntil    DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  goal                  AllocationGoal?
-  sectorGoals           SectorGoal[]
-  assets                Asset[]
-  transactions          Transaction[]
-  auditEvents           AuditEvent[]
-  webAuthnCredentials   WebAuthnCredential[]
-  securityChallenges    SecurityChallenge[]
+  id                     String                  @id @default(cuid())
+  email                  String                  @unique
+  name                   String?
+  image                  String?
+  appLockEnabled         Boolean                 @default(false)
+  appLockPinHash         String?
+  appLockTimeoutMinutes  Int                     @default(30)
+  appLockRequirePinOnly  Boolean                 @default(false)
+  appLockFailedAttempts  Int                     @default(0)
+  appLockLockedUntil     DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  goal                   AllocationGoal?
+  sectorGoals            SectorGoal[]
+  assets                 Asset[]
+  transactions           Transaction[]
+  auditEvents            AuditEvent[]
+  webAuthnCredentials    WebAuthnCredential[]
+  securityChallenges     SecurityChallenge[]
+  savingsGoals           SavingsGoal[]
+  savingsVehicles        SavingsVehicle[]
+  savingsMovements       SavingsMovement[]
+  emergencyReserveConfig EmergencyReserveConfig?
+  monthlyBudgets         MonthlyBudget[]
+  monthlyIncomes         MonthlyIncome[]
+  monthlyExpenses        MonthlyExpense[]
+  monthlyAllocations     MonthlyAllocation[]
 }
 
 model AllocationGoal {
@@ -228,3 +259,151 @@ model SecurityChallenge {
 
   @@index([userId, type])
 }
+
+model SavingsGoal {
+  id                 String              @id @default(cuid())
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  targetAmount       Decimal?            @db.Decimal(18, 2)
+  targetDate         DateTime?
+  isEmergencyReserve Boolean             @default(false)
+  isClosed           Boolean             @default(false)
+  sortOrder          Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  movements          SavingsMovement[]
+  monthlyAllocations MonthlyAllocation[]
+
+  @@unique([userId, name])
+  @@index([userId, isClosed, sortOrder])
+}
+
+model SavingsVehicle {
+  id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  institution String?
+  isArchived  Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  movements   SavingsMovement[]
+
+  @@unique([userId, name])
+  @@index([userId, isArchived])
+}
+
+model SavingsMovement {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId          String
+  goal            SavingsGoal         @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  vehicleId       String
+  vehicle         SavingsVehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  date            DateTime
+  type            SavingsMovementType
+  signedAmount    Decimal             @db.Decimal(18, 2)
+  transferGroupId String?
+  externalKey     String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([userId, externalKey])
+  @@index([userId, date])
+  @@index([goalId, date])
+  @@index([vehicleId])
+  @@index([transferGroupId])
+}
+
+model EmergencyReserveConfig {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlyExpense Decimal  @default(0) @db.Decimal(18, 2)
+  scenariosJson  Json
+  updatedAt      DateTime @updatedAt
+}
+
+model MonthlyBudget {
+  id              String              @id @default(cuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year            Int
+  month           Int
+  checkingBalance Decimal             @default(0) @db.Decimal(18, 2)
+  reportDate      DateTime            @default(now())
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  incomes         MonthlyIncome[]
+  expenses        MonthlyExpense[]
+  allocations     MonthlyAllocation[]
+
+  @@unique([userId, year, month])
+  @@index([userId, year, month])
+}
+
+model MonthlyIncome {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId    String
+  budget      MonthlyBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  name        String
+  amount      Decimal       @db.Decimal(18, 2)
+  isReceived  Boolean       @default(false)
+  isRecurring Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([budgetId, sortOrder])
+  @@index([userId])
+}
+
+model MonthlyExpense {
+  id           String                 @id @default(cuid())
+  userId       String
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId     String
+  budget       MonthlyBudget          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  name         String
+  category     MonthlyExpenseCategory @default(BILL)
+  amount       Decimal                @db.Decimal(18, 2)
+  isUnexpected Boolean                @default(false)
+  isPaid       Boolean                @default(false)
+  isRecurring  Boolean                @default(true)
+  sortOrder    Int                    @default(0)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([budgetId, isUnexpected, sortOrder])
+  @@index([userId])
+}
+
+model MonthlyAllocation {
+  id               String                @id @default(cuid())
+  userId           String
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId         String
+  budget           MonthlyBudget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  kind             MonthlyAllocationKind
+  name             String
+  savingsGoalId    String?
+  savingsGoal      SavingsGoal?          @relation(fields: [savingsGoalId], references: [id], onDelete: SetNull)
+  amount           Decimal               @db.Decimal(18, 2)
+  isExecuted       Boolean               @default(false)
+  linkedMovementId String?
+  isRecurring      Boolean               @default(true)
+  sortOrder        Int                   @default(0)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([budgetId, kind, sortOrder])
+  @@index([userId])
+  @@index([savingsGoalId])
+}
+

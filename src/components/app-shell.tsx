@@ -5,6 +5,7 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  CalendarCheck2,
   ChevronLeft,
   ChevronRight,
   Compass,
@@ -13,6 +14,7 @@ import {
   LogOut,
   Menu,
   PieChart,
+  PiggyBank,
   Shield,
   Target,
   TrendingUp,
@@ -24,36 +26,107 @@ import { RupeesLogo } from "@/components/rupees-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Geral", fullLabel: "Visão Geral", icon: LayoutDashboard },
-  { href: "/carteira", label: "Carteira", fullLabel: "Carteira", icon: PieChart },
+interface NavItem {
+  href: string;
+  label: string;
+  fullLabel: string;
+  icon: typeof LayoutDashboard;
+}
+
+interface NavGroup {
+  id: string;
+  title?: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    href: "/evolucao",
-    label: "Evolução",
-    fullLabel: "Evolução",
-    icon: TrendingUp,
+    id: "overview",
+    items: [
+      { href: "/", label: "Início", fullLabel: "Início", icon: LayoutDashboard },
+    ],
   },
   {
-    href: "/lancamentos",
-    label: "Lançamentos",
-    fullLabel: "Lançamentos",
-    icon: ArrowLeftRight,
+    id: "today",
+    title: "Hoje",
+    items: [
+      {
+        href: "/mes",
+        label: "Mês",
+        fullLabel: "Controle do Mês",
+        icon: CalendarCheck2,
+      },
+    ],
   },
   {
-    href: "/aporte",
-    label: "Aporte",
-    fullLabel: "Plano de Aporte",
-    icon: Compass,
+    id: "tomorrow",
+    title: "Amanhã",
+    items: [
+      {
+        href: "/caixinhas",
+        label: "Caixinhas",
+        fullLabel: "Caixinhas",
+        icon: PiggyBank,
+      },
+    ],
   },
-  { href: "/objetivos", label: "Objetivos", fullLabel: "Objetivos", icon: Target },
-  { href: "/eventos", label: "Eventos", fullLabel: "Eventos", icon: History },
-  { href: "/seguranca", label: "Segurança", fullLabel: "Segurança", icon: Shield },
+  {
+    id: "long-term",
+    title: "Longo Prazo",
+    items: [
+      {
+        href: "/carteira",
+        label: "Carteira",
+        fullLabel: "Carteira",
+        icon: PieChart,
+      },
+      {
+        href: "/evolucao",
+        label: "Evolução",
+        fullLabel: "Evolução",
+        icon: TrendingUp,
+      },
+      {
+        href: "/lancamentos",
+        label: "Lançamentos",
+        fullLabel: "Lançamentos",
+        icon: ArrowLeftRight,
+      },
+      {
+        href: "/aporte",
+        label: "Aporte",
+        fullLabel: "Plano de Aporte",
+        icon: Compass,
+      },
+      {
+        href: "/objetivos",
+        label: "Alocação",
+        fullLabel: "Alocação",
+        icon: Target,
+      },
+    ],
+  },
+  {
+    id: "system",
+    title: "Sistema",
+    items: [
+      { href: "/eventos", label: "Eventos", fullLabel: "Eventos", icon: History },
+      {
+        href: "/seguranca",
+        label: "Segurança",
+        fullLabel: "Segurança",
+        icon: Shield,
+      },
+    ],
+  },
 ];
 
-const MOBILE_NAV_HREFS = ["/", "/aporte", "/evolucao"] as const;
+const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+
+const MOBILE_NAV_HREFS = ["/", "/mes", "/caixinhas", "/carteira"] as const;
 const MOBILE_NAV_ITEMS = MOBILE_NAV_HREFS.map((href) =>
   NAV_ITEMS.find((item) => item.href === href)
-).filter((item): item is (typeof NAV_ITEMS)[number] => item !== undefined);
+).filter((item): item is NavItem => item !== undefined);
 const SIDEBAR_STORAGE_KEY = "rupees-sidebar-collapsed";
 const sidebarListeners = new Set<() => void>();
 
@@ -262,44 +335,63 @@ export function AppShell({
   }) => {
     const collapsed = options?.collapsed ?? false;
 
-    return NAV_ITEMS.map((item) => {
-      const Icon = item.icon;
-      const active =
-        item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+    return NAV_GROUPS.map((group, groupIndex) => (
+      <div
+        key={group.id}
+        className={cn(groupIndex > 0 && (collapsed ? "pt-2" : "pt-3"))}
+      >
+        {group.title && !collapsed && (
+          <p className="mb-1 px-3.5 text-[10px] font-semibold tracking-wider text-slate-400 uppercase dark:text-slate-500">
+            {group.title}
+          </p>
+        )}
+        {groupIndex > 0 && collapsed && (
+          <div className="mx-2 mb-2 border-t border-slate-200/80 dark:border-slate-800" />
+        )}
+        <div className="space-y-0.5">
+          {group.items.map((item) => {
+            const Icon = item.icon;
+            const active =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
 
-      return (
-        <Link
-          key={item.href}
-          href={item.href}
-          prefetch={options?.prefetch}
-          onClick={options?.onNavigate}
-          title={collapsed ? item.fullLabel : undefined}
-          aria-label={collapsed ? item.fullLabel : undefined}
-          className={cn(
-            "flex items-center rounded-xl py-2.5 text-sm font-medium transition-colors",
-            collapsed ? "justify-center px-2" : "gap-3 px-3.5",
-            active
-              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-          )}
-        >
-          <Icon
-            className={cn(
-              "h-[18px] w-[18px] shrink-0",
-              active
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-slate-400 dark:text-slate-500"
-            )}
-          />
-          {!collapsed && (
-            <>
-              <span className="truncate">{item.fullLabel}</span>
-              <NavPendingDot />
-            </>
-          )}
-        </Link>
-      );
-    });
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={options?.prefetch}
+                onClick={options?.onNavigate}
+                title={collapsed ? item.fullLabel : undefined}
+                aria-label={collapsed ? item.fullLabel : undefined}
+                className={cn(
+                  "flex items-center rounded-xl py-2 text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-2" : "gap-3 px-3.5",
+                  active
+                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "h-[18px] w-[18px] shrink-0",
+                    active
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-slate-400 dark:text-slate-500"
+                  )}
+                />
+                {!collapsed && (
+                  <>
+                    <span className="truncate">{item.fullLabel}</span>
+                    <NavPendingDot />
+                  </>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    ));
   };
 
   const userAvatar = user.image ? (
@@ -403,7 +495,7 @@ export function AppShell({
         </div>
 
         <nav
-          className="flex-1 space-y-1 px-3 py-4"
+          className="flex-1 overflow-y-auto px-3 py-3"
           aria-label="Navegação principal"
         >
           {renderNavLinks({ collapsed: desktopCollapsed })}
@@ -480,7 +572,7 @@ export function AppShell({
           </div>
 
           <nav
-            className="flex-1 space-y-1 overflow-y-auto px-3 py-4"
+            className="flex-1 overflow-y-auto px-3 py-3"
             aria-label="Menu lateral mobile"
           >
             {renderNavLinks({
@@ -541,7 +633,7 @@ export function AppShell({
         aria-label="Navegação inferior"
         className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/90 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
       >
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {MOBILE_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active =

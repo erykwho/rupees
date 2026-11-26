@@ -161,7 +161,7 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
       {/* Compact Header */}
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl dark:text-slate-100">
-          Objetivos
+          Alocação
         </h1>
 
         {activeTab === "CLASSES" && (
@@ -226,7 +226,7 @@ export function GoalsEditor({ initialGoal, summary }: GoalsEditorProps) {
           {saved && (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/50 dark:text-emerald-300">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Objetivos salvos.
+              Metas de alocação salvas.
             </div>
           )}
 

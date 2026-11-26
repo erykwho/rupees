@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { authErrorResponse, requireUser } from "@/lib/auth";
 import { listAuditEvents } from "@/lib/audit-service";
-import type { AuditActionKey, AuditEntityTypeKey } from "@/lib/domain/audit";
+import type {
+  AuditActionKey,
+  AuditEntityTypeKey,
+  AuditPillarFilter,
+} from "@/lib/domain/audit";
+
+const VALID_PILLARS = new Set<AuditPillarFilter>([
+  "ALL",
+  "LONG_TERM",
+  "SAVINGS",
+]);
 
 const VALID_ENTITY_TYPES = new Set<AuditEntityTypeKey | "ALL">([
   "ALL",
@@ -9,6 +19,8 @@ const VALID_ENTITY_TYPES = new Set<AuditEntityTypeKey | "ALL">([
   "TRANSACTION",
   "GOAL",
   "SECTOR_GOAL",
+  "SAVINGS_GOAL",
+  "SAVINGS_MOVEMENT",
 ]);
 
 const VALID_ACTIONS = new Set<AuditActionKey | "ALL">([
@@ -24,6 +36,7 @@ export async function GET(request: Request) {
     const user = await requireUser();
     const { searchParams } = new URL(request.url);
 
+    const rawPillar = (searchParams.get("pillar") ?? "ALL") as AuditPillarFilter;
     const rawEntityType = (searchParams.get("entityType") ?? "ALL") as
       | AuditEntityTypeKey
       | "ALL";
@@ -34,6 +47,7 @@ export async function GET(request: Request) {
     const cursor = searchParams.get("cursor") ?? undefined;
     const rawLimit = Number(searchParams.get("limit") ?? "30");
 
+    const pillar = VALID_PILLARS.has(rawPillar) ? rawPillar : "ALL";
     const entityType = VALID_ENTITY_TYPES.has(rawEntityType)
       ? rawEntityType
       : "ALL";
@@ -41,6 +55,7 @@ export async function GET(request: Request) {
     const limit = Number.isFinite(rawLimit) ? rawLimit : 30;
 
     const result = await listAuditEvents(user.id, {
+      pillar,
       entityType,
       action,
       q,

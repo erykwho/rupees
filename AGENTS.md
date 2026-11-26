@@ -18,7 +18,7 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
 ## Production Invariants (Never Break)
 
 1. **Strict Multi-Tenant Isolation & Zero IDOR:**
-   - Every authenticated API route (`/api/assets/**`, `/api/transactions/**`, `/api/goals`, `/api/sector-goals/**`, `/api/portfolio`, `/api/evolution`, `/api/fixed-income`, `/api/contribution-plan`, `/api/events/**`, `/api/tickers/**`, `/api/security/**`) MUST validate the session (`requireUser()` or `requireAuthenticatedUserAllowLocked()` exclusively on unlock/status endpoints), return `401` when unauthenticated, validate inputs with Zod (`400`), and scope **every** read, update, delete, and cross-entity reference (e.g., `assetId` in `POST`/`PATCH /api/transactions`) by `userId`.
+   - Every authenticated API route (`/api/assets/**`, `/api/transactions/**`, `/api/goals`, `/api/sector-goals/**`, `/api/portfolio`, `/api/evolution`, `/api/fixed-income`, `/api/contribution-plan`, `/api/events/**`, `/api/tickers/**`, `/api/savings/**`, `/api/monthly-budget/**`, `/api/security/**`) MUST validate the session (`requireUser()` or `requireAuthenticatedUserAllowLocked()` exclusively on unlock/status endpoints), return `401` when unauthenticated, validate inputs with Zod (`400`), and scope **every** read, update, delete, and cross-entity reference (e.g., `assetId` in `POST`/`PATCH /api/transactions`, `goalId`/`vehicleId` in `/api/savings/movements`, `savingsGoalId` in `/api/monthly-budget/**`) by `userId`.
    - Only `/api/auth/**`, `/api/health`, `/login`, `/manifest.webmanifest`, `/icons/*`, and `/favicon.ico` are accessible without a valid Google session.
 2. **Fail-Closed App Lock (`src/proxy.ts` + `src/lib/auth.ts`):**
    - When `appLockEnabled === true`, every page route redirects to `/unlock` and every protected API route returns `423` (`code: "APP_LOCKED"`) without a valid server-signed unlock cookie (`rupees_app_unlock`).
@@ -27,12 +27,14 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
 3. **Zero-Downtime Database Migrations (Expand-and-Contract):**
    - Production database updates run exclusively via **Prisma Migrations** (`prisma migrate deploy` in `scripts/vercel-db-sync.mjs`, with one-time `P3005` baseline transition to `00000000000000_init`). **Never** re-enable `prisma db push` in production.
    - Never drop or rename an existing column, table, or enum value in a single deploy. Always use *expand-and-contract* (add nullable/default column first → deploy compatible app code → backfill/migrate → remove legacy column in a subsequent release) so 1-click Vercel rollbacks remain safe.
-4. **Financial Integrity, Currencies & Emergency Reserve Separation:**
-   - `EMERGENCY_RESERVE` (e.g., `SELIC`) MUST NEVER be included in total invested capital when computing `% Current`, `% Target`, or class rebalancing; it is displayed separately and added only in the **Total + Reserve** metric.
-   - B3, Fixed Income, and Reserve assets are recorded in `BRL`; US assets (`US_STOCK`, `US_REIT`) are recorded in `USD` (average price in `USD`) and consolidated into `BRL` using the `USDBRL=X` exchange rate.
-   - Fixed Income and Reserve operate with `priceMode = MANUAL` and `manualPrice = 1`; yield updates use `TransactionType.BALANCE_ADJUSTMENT` (which preserves positive/negative signs and forces `unitPrice = 1`).
+4. **Three-Pillar Separation, Financial Integrity & Currencies:**
+   - Rupees organizes personal finances into **three strictly separated pillars** that MUST NEVER be mixed into a single consolidated total: **Today** (`/mes`, monthly cash flow), **Tomorrow** (`/caixinhas`, short/medium-term savings buckets + Emergency Reserve), and **Long-Term** (`/carteira`, `/evolucao`, `/lancamentos`, `/aporte`, `/objetivos` labeled *Alocação*).
+   - `SavingsGoal` (Caixinhas) is the official home for the Emergency Reserve alongside short/medium-term buckets; legacy `AssetClass.EMERGENCY_RESERVE` in the Long-Term portfolio remains 100% decoupled for backward compatibility and MUST NEVER be included in total invested capital when computing `% Current`, `% Target`, or class rebalancing.
+   - B3, Fixed Income, Reserve, Savings Buckets, and Monthly Cash Flow items are recorded in `BRL`; US assets (`US_STOCK`, `US_REIT`) are recorded in `USD` (average price in `USD`) and consolidated into `BRL` using the `USDBRL=X` exchange rate.
+   - Fixed Income and legacy Reserve operate with `priceMode = MANUAL` and `manualPrice = 1`; yield updates use `TransactionType.BALANCE_ADJUSTMENT` (which preserves positive/negative signs and forces `unitPrice = 1`).
 5. **Transactional Audit Trail (`AuditEvent`):**
-   - Every mutation on `ASSET`, `TRANSACTION`, `GOAL`, and `SECTOR_GOAL` (create, update, delete, revert) MUST atomically record its corresponding `AuditEvent` inside the same `prisma.$transaction`.
+   - Every mutation on `ASSET`, `TRANSACTION`, `GOAL`, `SECTOR_GOAL`, `SAVINGS_GOAL`, and `SAVINGS_MOVEMENT` (create, update, delete, revert — including atomic paired transfers) MUST atomically record its corresponding `AuditEvent` inside the same `prisma.$transaction`.
+   - Monthly Budget (`/mes`) mutations intentionally do NOT record `AuditEvent` rows to keep `/eventos` noise-free; `/eventos` supports pillar filtering (`ALL` | `LONG_TERM` | `SAVINGS`).
 6. **Backward-Compatible Client Storage:**
    - `localStorage` readers (theme and privacy mode) MUST gracefully handle missing, corrupted, or legacy shapes with safe defaults — never throw on parse or when `window` is undefined.
 7. **React 19 & Next.js 16 Guardrails:**
@@ -40,12 +42,12 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
    - Do not call `setState` synchronously inside a `useEffect` body; use `useSyncExternalStore`, `queueMicrotask`, or async callbacks.
    - Keep friendly `pt-BR` Error Boundaries (`src/app/error.tsx` and `src/app/global-error.tsx`) and `/api/health` (`Cache-Control: no-store`, with optional `?db=1` Neon connectivity check).
 8. **Per-User Caching & Read-Your-Own-Writes Consistency (`src/lib/server-cache.ts`, `next.config.ts`):**
-   - Server-side financial snapshots (`loadCachedUserPortfolio`, `loadCachedUserEvolutionPageData`) MUST scope cache keys and tags strictly by `userId` (`portfolio:<userId>`, `evolution:<userId>`, `fixed-income:<userId>`, 60s TTL) and NEVER leak data across tenants.
-   - Every mutation Route Handler (`POST`/`PATCH`/`PUT`/`DELETE` on assets, transactions, goals, sector-goals, and event revert) and explicit `?refresh=1` refresh MUST call `invalidateUserFinancialCaches(userId)` (`revalidateTag(tag, { expire: 0 })`), and mutating client components MUST call `router.refresh()` to clear the 30s dynamic Client Router Cache (`experimental.staleTimes.dynamic: 30`, strictly shorter than the 5-minute minimum App Lock timeout).
+   - Server-side financial snapshots (`loadCachedUserPortfolio`, `loadCachedUserEvolutionPageData`, `loadCachedUserSavingsSummary`, `loadCachedUserMonthlyBudgetHomeSummary`) MUST scope cache keys and tags strictly by `userId` (`portfolio:<userId>`, `evolution:<userId>`, `fixed-income:<userId>`, `savings:<userId>`, `monthly-budget:<userId>`, 60s TTL) and NEVER leak data across tenants.
+   - Every mutation Route Handler MUST immediately expire its affected tags (`invalidateUserFinancialCaches`, `invalidateUserSavingsCaches`, or `invalidateUserMonthlyBudgetCaches` using `revalidateTag(tag, { expire: 0 })`), and mutating client components MUST call `router.refresh()` to clear the 30s dynamic Client Router Cache (`experimental.staleTimes.dynamic: 30`, strictly shorter than the 5-minute minimum App Lock timeout).
 
 ## Core Domain Business Rules
 
-1. **Allocation Goal Hierarchy (`AllocationGoal`, `/api/goals`):**
+1. **Allocation Goal Hierarchy (`AllocationGoal`, `/api/goals`, UI label `Alocação` at `/objetivos`):**
    - `Fixed Income` + `Variable Income` = 100%
    - Within Variable Income: `Brazil` + `USA` = 100%
    - Within Brazil: `Stocks` + `FIIs` = 100%
@@ -55,8 +57,8 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
    - Apply exclusively to Variable Income classes (`BR_STOCK`, `BR_FII`, `US_STOCK`, `US_REIT`).
    - Renaming a sector propagates the new name to the user's linked assets in the same transaction.
    - Deleting a sector with linked assets MUST be blocked with `409`, listing the affected tickers.
-3. **Contribution Planner (`computeContributionPlan`, `/api/contribution-plan`):**
-   - Prioritizes the most underweight classes and assets relative to targets while respecting ignored classes/tickers and `maxAssets`.
+3. **Contribution Planner (`computeContributionPlan`, `/api/contribution-plan`, `/aporte?valor=X`):**
+   - Prioritizes the most underweight classes and assets relative to targets while respecting ignored classes/tickers and `maxAssets`. Supports optional `?valor=` prefill from Monthly Budget.
    - B3 (`BR_STOCK`, `BR_FII`): integer share quantities only (`FLOOR`).
    - USA (`US_STOCK`, `US_REIT`): fractional shares allowed with a minimum US\$ 5 contribution converted to BRL.
    - Fixed Income: any BRL amount.
@@ -68,7 +70,16 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
    - Historical series reconstructs equity value, invested capital, nominal gain, and weighted return backed by `HistoricalQuoteCache` / `HistoricalQuoteSync`.
    - Fixed Income projection computes projected yields using benchmarks (CDI, Selic, IPCA, Prefixed) and tax rules (`taxExempt` vs progressive IR).
    - Long-term projection models monthly contributions, real/nominal returns, and inflation.
-6. **Security, App Lock & Privacy Mode (`src/lib/domain/security.ts`, `src/lib/app-lock.ts`, `src/lib/privacy.ts`):**
+6. **Tomorrow — Savings Buckets & Emergency Reserve (`src/lib/domain/savings.ts`, `/caixinhas`, `/api/savings/**`):**
+   - `SavingsGoal` supports optional `targetAmount` and `targetDate` (open-ended sinking funds allowed), `isEmergencyReserve`, and archival (`isClosed`). Deleting a goal or custody vehicle (`SavingsVehicle`) with linked movements MUST be blocked with `409`.
+   - `SavingsMovement` supports `DEPOSIT`, `WITHDRAWAL`, `YIELD_ADJUSTMENT`, and atomic paired `TRANSFER` (`TRANSFER_OUT` + `TRANSFER_IN` sharing `transferGroupId` and audited as a single `SAVINGS_MOVEMENT` event).
+   - Custody matrix reconciles balances across `SavingsGoal × SavingsVehicle`. `EmergencyReserveConfig` evaluates scenarios (`MONTHS` of monthly expense or `FIXED` BRL) using `MAX(scenarios)` with 1-click apply to the Emergency Reserve goal.
+7. **Today — Monthly Cash Flow (`src/lib/domain/monthly-budget.ts`, `/mes`, `/api/monthly-budget/**`):**
+   - Tracks per-month `checkingBalance`, `reportDate`, `MonthlyIncome` (`isReceived`), `MonthlyExpense` (categories `BILL`/`VARIABLE`/`INVESTMENT`/`TAX`, `isUnexpected`, `isPaid`), and `MonthlyAllocation` (`LONG_TERM_DEPOSIT`, `SAVINGS_DEPOSIT`, `SAVINGS_WITHDRAWAL`, `isExecuted`).
+   - Core cash-flow invariants: `netIncome = totalIncome - taxExpenses`; `realAvailableCash = checkingBalance + pendingIncome + pendingSavingsWithdrawals`; `surplusBeforeInvestments = realAvailableCash - pendingExpenses`; `finalSurplus = surplusBeforeInvestments - pendingInvestments`.
+   - New months clone recurring incomes, recurring non-unexpected expenses, and recurring allocations (skipping closed `SavingsGoal`s), resetting all statuses and `linkedMovementId`.
+   - Assisted 1-click bridge (`POST /api/monthly-budget/allocations/[itemId]/execute-to-savings`) atomically records the `SavingsMovement` + `AuditEvent` and marks the monthly item executed (`linkedMovementId`, preventing double execution with `409`).
+8. **Security, App Lock & Privacy Mode (`src/lib/domain/security.ts`, `src/lib/app-lock.ts`, `src/lib/privacy.ts`):**
    - Authentication via Auth.js v5 (`next-auth@beta`, JWT) with Google OAuth 2.0 + `ALLOWED_EMAILS` allowlist.
    - Optional App Lock with 6-digit PIN (salted scrypt hash) and WebAuthn biometrics (`@simplewebauthn/server`), sliding inactivity window, and temporary lockout after consecutive failures.
 
@@ -83,12 +94,12 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
 
 - `.github/workflows/ci.yml` — GitHub Actions CI pipeline (Prisma validate, Vitest, ESLint, Next.js build, and Playwright E2E).
 - `e2e/smoke.spec.ts` & `playwright.config.ts` — Mobile PWA Playwright E2E smoke tests (`/api/health`, `/login` redirects, fail-closed `401` APIs, theme persistence, and PWA manifest).
-- `prisma/schema.prisma` & `prisma/migrations/` — Data models (`User`, `AllocationGoal`, `SectorGoal`, `Asset`, `Transaction`, `QuoteCache`, `HistoricalQuoteCache`, `HistoricalQuoteSync`, `AuditEvent`, `WebAuthnCredential`, `SecurityChallenge`) and versioned SQL migrations.
-- `prisma/import-sheets.ts`, `fix-event-dates.ts`, `cleanup-mar2025-reversals.ts` — Idempotent import and data maintenance scripts.
+- `prisma/schema.prisma` & `prisma/migrations/` — Data models (`User`, `AllocationGoal`, `SectorGoal`, `Asset`, `Transaction`, `QuoteCache`, `HistoricalQuoteCache`, `HistoricalQuoteSync`, `AuditEvent`, `WebAuthnCredential`, `SecurityChallenge`, `SavingsGoal`, `SavingsVehicle`, `SavingsMovement`, `EmergencyReserveConfig`, `MonthlyBudget`, `MonthlyIncome`, `MonthlyExpense`, `MonthlyAllocation`) and versioned SQL migrations.
+- `prisma/import-sheets.ts`, `import-financial-sheet.ts`, `fix-event-dates.ts`, `cleanup-mar2025-reversals.ts` — Idempotent import and data maintenance scripts.
 - `scripts/vercel-db-sync.mjs` — Production-only `prisma migrate deploy` runner (with one-time `P3005` baseline and no `db push` fallback).
-- `src/lib/domain/` — Pure domain engines and Vitest suites (`calculations`, `evolution`, `fixed-income`, `long-term-projection`, `audit`, `security`, `ticker-validation`, `chart-zoom`, `event-date-sync`, `reversal-cleanup`, `types`).
-- `src/lib/` — Loaders and services (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `server-cache`, `background-work`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
-- `src/app/(dashboard)/` — Authenticated pages + `loading.tsx` skeletons: `/` (Overview), `/carteira` (Portfolio), `/lancamentos` (Transactions), `/aporte` (Contribution Planner), `/objetivos` (Goals), `/evolucao` (Evolution), `/eventos` (Audit Events), `/seguranca` (Security).
+- `src/lib/domain/` — Pure domain engines and Vitest suites (`calculations`, `evolution`, `fixed-income`, `long-term-projection`, `savings`, `monthly-budget`, `financial-sheet-import`, `audit`, `security`, `ticker-validation`, `chart-zoom`, `event-date-sync`, `reversal-cleanup`, `types`).
+- `src/lib/` — Loaders and services (`portfolio-loader`, `evolution-loader`, `fixed-income-loader`, `savings-loader`, `monthly-budget-loader`, `quotes`, `historical-quotes`, `fixed-income-rates`, `server-cache`, `background-work`, `audit-service`, `app-lock`, `app-lock-token`, `webauthn`, `privacy`, `pull-to-refresh`, `auth`, `prisma`).
+- `src/app/(dashboard)/` — Authenticated pages + `loading.tsx` skeletons: `/` (3-Pillar Home), `/mes` (Monthly Cash Flow), `/caixinhas` (Savings Buckets), `/carteira` (Portfolio), `/lancamentos` (Transactions), `/aporte` (Contribution Planner), `/objetivos` (Allocation Goals), `/evolucao` (Evolution), `/eventos` (Audit Events), `/seguranca` (Security).
 - `src/app/api/` — Protected REST routes + `/api/health` + security/contract Vitest suites (`routes.test.ts`, `route.test.ts`).
 - `src/app/error.tsx` & `src/app/global-error.tsx` — `pt-BR` Error Boundaries.
 
@@ -100,6 +111,7 @@ Mobile-first personal investment tracker (**PWA**) for Brazilian equities & FIIs
 - `pnpm build` — Run `prisma generate && node scripts/vercel-db-sync.mjs && next build`.
 - `pnpm db:migrate` — Create and apply a new Prisma migration locally (`prisma migrate dev`). Always commit generated files under `prisma/migrations/`.
 - `pnpm db:migrate:deploy` — Apply pending migrations in staging/production environments.
+- `pnpm db:import:sheet` — Idempotent script (`prisma/import-financial-sheet.ts`) with `--dry-run` default and `--apply` for importing `Investimentos - Geral` and monthly tabs from CSV.
 - `pnpm db:fix-event-dates` — Idempotent script (`prisma/fix-event-dates.ts`) with `--dry-run` default and `--apply`, accepting `--csv` (Aportes tab) and/or `--bootstrap` (initial `GOAL` and `ASSET` events).
 - **Pre-PR Verification:** Always validate `prisma validate`, `pnpm test`, `pnpm lint`, `pnpm build`, and `pnpm test:e2e` before opening a PR.
 - **Neon PostgreSQL Direct Operations:**

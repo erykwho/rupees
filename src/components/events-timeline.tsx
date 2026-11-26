@@ -12,9 +12,11 @@ import {
   Layers,
   Loader2,
   PieChart,
+  PiggyBank,
   RotateCcw,
   Search,
   Target,
+  WalletCards,
   X,
 } from "lucide-react";
 import {
@@ -23,6 +25,7 @@ import {
   type AuditActionKey,
   type AuditEntityTypeKey,
   type AuditEventDTO,
+  type AuditPillarFilter,
   buildEventSummary,
   buildRevertDescription,
   computeAuditDiffs,
@@ -36,15 +39,27 @@ interface EventsTimelineProps {
   initialTotalCount: number;
 }
 
+const PILLAR_FILTER_OPTIONS: Array<{
+  value: AuditPillarFilter;
+  label: string;
+}> = [
+  { value: "ALL", label: "Todos" },
+  { value: "LONG_TERM", label: "Longo Prazo" },
+  { value: "SAVINGS", label: "Caixinhas" },
+];
+
 const ENTITY_FILTER_OPTIONS: Array<{
   value: AuditEntityTypeKey | "ALL";
   label: string;
+  pillar?: Exclude<AuditPillarFilter, "ALL">;
 }> = [
   { value: "ALL", label: "Todos módulos" },
-  { value: "ASSET", label: "Carteira" },
-  { value: "TRANSACTION", label: "Lançamentos" },
-  { value: "GOAL", label: "Objetivos" },
-  { value: "SECTOR_GOAL", label: "Setores" },
+  { value: "ASSET", label: "Carteira", pillar: "LONG_TERM" },
+  { value: "TRANSACTION", label: "Lançamentos", pillar: "LONG_TERM" },
+  { value: "GOAL", label: "Alocação", pillar: "LONG_TERM" },
+  { value: "SECTOR_GOAL", label: "Setores", pillar: "LONG_TERM" },
+  { value: "SAVINGS_GOAL", label: "Caixinhas", pillar: "SAVINGS" },
+  { value: "SAVINGS_MOVEMENT", label: "Mov. Caixinhas", pillar: "SAVINGS" },
 ];
 
 const ACTION_FILTER_OPTIONS: Array<{
@@ -62,6 +77,8 @@ function getEntityIcon(entityType: AuditEntityTypeKey) {
   if (entityType === "ASSET") return PieChart;
   if (entityType === "TRANSACTION") return ArrowLeftRight;
   if (entityType === "SECTOR_GOAL") return Layers;
+  if (entityType === "SAVINGS_GOAL") return PiggyBank;
+  if (entityType === "SAVINGS_MOVEMENT") return WalletCards;
   return Target;
 }
 
@@ -88,6 +105,10 @@ function getEntityIconBoxClass(entityType: AuditEntityTypeKey): string {
       return "bg-sky-50 text-sky-600 dark:bg-sky-950/60 dark:text-sky-400";
     case "SECTOR_GOAL":
       return "bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400";
+    case "SAVINGS_GOAL":
+      return "bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400";
+    case "SAVINGS_MOVEMENT":
+      return "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400";
   }
 }
 
@@ -129,6 +150,7 @@ export function EventsTimeline({
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [totalCount, setTotalCount] = useState<number>(initialTotalCount);
 
+  const [pillarFilter, setPillarFilter] = useState<AuditPillarFilter>("ALL");
   const [entityFilter, setEntityFilter] = useState<AuditEntityTypeKey | "ALL">(
     "ALL"
   );
@@ -151,6 +173,25 @@ export function EventsTimeline({
 
   const isFirstRenderRef = useRef(true);
 
+  const visibleEntityOptions = useMemo(() => {
+    if (pillarFilter === "ALL") return ENTITY_FILTER_OPTIONS;
+    return ENTITY_FILTER_OPTIONS.filter(
+      (opt) => opt.value === "ALL" || opt.pillar === pillarFilter
+    );
+  }, [pillarFilter]);
+
+  function handleSelectPillar(nextPillar: AuditPillarFilter) {
+    setPillarFilter(nextPillar);
+    if (nextPillar !== "ALL" && entityFilter !== "ALL") {
+      const currentOpt = ENTITY_FILTER_OPTIONS.find(
+        (opt) => opt.value === entityFilter
+      );
+      if (currentOpt?.pillar !== nextPillar) {
+        setEntityFilter("ALL");
+      }
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query.trim());
@@ -169,6 +210,7 @@ export function EventsTimeline({
 
       try {
         const params = new URLSearchParams();
+        if (pillarFilter !== "ALL") params.set("pillar", pillarFilter);
         if (entityFilter !== "ALL") params.set("entityType", entityFilter);
         if (actionFilter !== "ALL") params.set("action", actionFilter);
         if (debouncedQuery) params.set("q", debouncedQuery);
@@ -199,7 +241,7 @@ export function EventsTimeline({
         setLoadingMore(false);
       }
     },
-    [entityFilter, actionFilter, debouncedQuery]
+    [pillarFilter, entityFilter, actionFilter, debouncedQuery]
   );
 
   useEffect(() => {
@@ -331,6 +373,25 @@ export function EventsTimeline({
         </div>
       )}
 
+      {/* Pillar Filter: Todos | Longo Prazo | Caixinhas */}
+      <div className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-slate-100/80 p-1 sm:inline-flex sm:w-auto dark:border-slate-800 dark:bg-slate-900">
+        {PILLAR_FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => handleSelectPillar(opt.value)}
+            className={cn(
+              "whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:px-4",
+              pillarFilter === opt.value
+                ? "bg-white text-slate-900 shadow-2xs dark:bg-slate-800 dark:text-slate-100"
+                : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Compact Filter Bar: Search + 2 Native Selects */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -339,7 +400,7 @@ export function EventsTimeline({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar ticker ou evento..."
+            placeholder="Buscar ticker, caixinha ou evento..."
             className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-8 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {query && (
@@ -364,7 +425,7 @@ export function EventsTimeline({
               }
               className="h-9 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-7 text-xs font-semibold text-slate-700 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              {ENTITY_FILTER_OPTIONS.map((opt) => (
+              {visibleEntityOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
