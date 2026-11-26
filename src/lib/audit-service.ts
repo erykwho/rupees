@@ -5,6 +5,8 @@ import {
   type AuditEntityType,
   type AuditEvent,
   Prisma,
+  type SavingsGoal,
+  type SavingsMovement,
   type SectorGoal,
   type Transaction,
 } from "@prisma/client";
@@ -14,13 +16,23 @@ import {
   type AuditActionKey,
   type AuditEntityTypeKey,
   type AuditEventDTO,
+  type AuditPillarFilter,
   type AuditSnapshot,
   type GoalSnapshot,
+  LONG_TERM_AUDIT_ENTITY_TYPES,
+  SAVINGS_AUDIT_ENTITY_TYPES,
+  type SavingsGoalSnapshot,
+  type SavingsMovementLegSnapshot,
+  type SavingsMovementSnapshot,
   type SectorGoalSnapshot,
   TRANSACTION_TYPE_LABELS,
   type TransactionSnapshot,
   evaluateRevertEligibility,
 } from "@/lib/domain/audit";
+import {
+  SAVINGS_MOVEMENT_TYPE_LABELS,
+  type SavingsMovementTypeKey,
+} from "@/lib/domain/savings";
 import {
   ASSET_CLASS_LABELS,
   type AssetClassKey,
@@ -39,6 +51,11 @@ export type TransactionWithAssetInfo = Transaction & {
     assetClass: string;
     currency: string;
   };
+};
+
+export type SavingsMovementWithInfo = SavingsMovement & {
+  goal: { id: string; name: string };
+  vehicle: { id: string; name: string };
 };
 
 export function toAssetSnapshot(
@@ -110,6 +127,58 @@ export function toSectorGoalSnapshot(sg: SectorGoal): SectorGoalSnapshot {
     name: sg.name,
     targetPct: Number(sg.targetPct),
   };
+}
+
+export function toSavingsGoalSnapshot(goal: SavingsGoal): SavingsGoalSnapshot {
+  return {
+    id: goal.id,
+    name: goal.name,
+    targetAmount: goal.targetAmount !== null ? Number(goal.targetAmount) : null,
+    targetDate: goal.targetDate
+      ? goal.targetDate.toISOString().slice(0, 10)
+      : null,
+    isEmergencyReserve: goal.isEmergencyReserve,
+    isClosed: goal.isClosed,
+    sortOrder: goal.sortOrder,
+  };
+}
+
+function toSavingsMovementLegSnapshot(
+  m: SavingsMovementWithInfo
+): SavingsMovementLegSnapshot {
+  return {
+    id: m.id,
+    goalId: m.goalId,
+    goalName: m.goal.name,
+    vehicleId: m.vehicleId,
+    vehicleName: m.vehicle.name,
+    date: m.date.toISOString(),
+    type: m.type as SavingsMovementTypeKey,
+    signedAmount: Number(m.signedAmount),
+    transferGroupId: m.transferGroupId ?? null,
+    notes: m.notes ?? null,
+  };
+}
+
+export function toSavingsMovementSnapshot(
+  primary: SavingsMovementWithInfo,
+  counterpart?: SavingsMovementWithInfo | null
+): SavingsMovementSnapshot {
+  return {
+    ...toSavingsMovementLegSnapshot(primary),
+    ...(counterpart
+      ? { counterpart: toSavingsMovementLegSnapshot(counterpart) }
+      : {}),
+  };
+}
+
+export function buildSavingsMovementEntityLabel(
+  snap: SavingsMovementSnapshot
+): string {
+  if (snap.counterpart) {
+    return `${snap.goalName} → ${snap.counterpart.goalName} (Transferência)`;
+  }
+  return `${snap.goalName} (${SAVINGS_MOVEMENT_TYPE_LABELS[snap.type]})`;
 }
 
 export function buildSectorGoalEntityLabel(sg: {
@@ -292,6 +361,7 @@ export async function ensureAuditBackfill(userId: string): Promise<void> {
 }
 
 export interface ListAuditEventsParams {
+  pillar?: AuditPillarFilter;
   entityType?: AuditEntityTypeKey | "ALL";
   action?: AuditActionKey | "ALL";
   q?: string;
@@ -311,8 +381,28 @@ export async function listAuditEvents(
 ): Promise<ListAuditEventsResult> {
   const limit = Math.min(Math.max(params.limit ?? 30, 1), 100);
   const query = params.q?.trim();
+  const pillar: AuditPillarFilter = params.pillar ?? "ALL";
+
+  const allowedByPillar =
+    pillar === "LONG_TERM"
+      ? LONG_TERM_AUDIT_ENTITY_TYPES
+      : pillar === "SAVINGS"
+        ? SAVINGS_AUDIT_ENTITY_TYPES
+        : null;
+
+  let entityTypeFilter: Prisma.EnumAuditEntityTypeFilter<"AuditEvent"> | AuditEntityType | undefined;
+  if (params.entityType && params.entityType !== "ALL") {
+    if (allowedByPillar && !allowedByPillar.includes(params.entityType)) {
+      return { events: [], nextCursor: null, totalCount: 0 };
+    }
+    entityTypeFilter = params.entityType;
+  } else if (allowedByPillar) {
+    entityTypeFilter = { in: allowedByPillar };
+  }
+
   const hasFiltersOrCursor = Boolean(
-    (params.entityType && params.entityType !== "ALL") ||
+    pillar !== "ALL" ||
+      (params.entityType && params.entityType !== "ALL") ||
       (params.action && params.action !== "ALL") ||
       query ||
       params.cursor
@@ -320,9 +410,7 @@ export async function listAuditEvents(
 
   const where: Prisma.AuditEventWhereInput = {
     userId,
-    ...(params.entityType && params.entityType !== "ALL"
-      ? { entityType: params.entityType }
-      : {}),
+    ...(entityTypeFilter ? { entityType: entityTypeFilter } : {}),
     ...(params.action && params.action !== "ALL"
       ? { action: params.action }
       : {}),
@@ -379,9 +467,13 @@ export async function listAuditEvents(
     TRANSACTION: new Set(),
     GOAL: new Set(),
     SECTOR_GOAL: new Set(),
+    SAVINGS_GOAL: new Set(),
+    SAVINGS_MOVEMENT: new Set(),
   };
   const relevantParentAssetIds = new Set<string>();
   const relevantTickers = new Set<string>();
+  const relevantSavingsGoalIds = new Set<string>();
+  const relevantSavingsVehicleIds = new Set<string>();
 
   for (const ev of pageEvents) {
     entityIdsByType[ev.entityType as AuditEntityTypeKey].add(ev.entityId);
@@ -392,6 +484,15 @@ export async function listAuditEvents(
     if (ev.entityType === "ASSET" && before) {
       relevantTickers.add((before as AssetSnapshot).ticker);
     }
+    if (ev.entityType === "SAVINGS_MOVEMENT" && before) {
+      const m = before as SavingsMovementSnapshot;
+      relevantSavingsGoalIds.add(m.goalId);
+      relevantSavingsVehicleIds.add(m.vehicleId);
+      if (m.counterpart) {
+        relevantSavingsGoalIds.add(m.counterpart.goalId);
+        relevantSavingsVehicleIds.add(m.counterpart.vehicleId);
+      }
+    }
   }
 
   const allEntityIds = [
@@ -399,6 +500,8 @@ export async function listAuditEvents(
     ...entityIdsByType.TRANSACTION,
     ...entityIdsByType.GOAL,
     ...entityIdsByType.SECTOR_GOAL,
+    ...entityIdsByType.SAVINGS_GOAL,
+    ...entityIdsByType.SAVINGS_MOVEMENT,
   ];
 
   const [
@@ -409,6 +512,10 @@ export async function listAuditEvents(
     assetTxRows,
     existingSectorGoals,
     sectorLinkedAssets,
+    existingSavingsGoals,
+    savingsGoalMovementRows,
+    existingSavingsMovements,
+    existingSavingsVehicles,
   ] = await Promise.all([
     prisma.auditEvent.findMany({
       where: {
@@ -472,6 +579,40 @@ export async function listAuditEvents(
           select: { assetClass: true, sector: true },
         })
       : Promise.resolve([]),
+    entityIdsByType.SAVINGS_GOAL.size > 0 || relevantSavingsGoalIds.size > 0
+      ? prisma.savingsGoal.findMany({
+          where: { userId },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    entityIdsByType.SAVINGS_GOAL.size > 0
+      ? prisma.savingsMovement.findMany({
+          where: {
+            userId,
+            goalId: { in: [...entityIdsByType.SAVINGS_GOAL] },
+          },
+          select: { goalId: true },
+          distinct: ["goalId"],
+        })
+      : Promise.resolve([]),
+    entityIdsByType.SAVINGS_MOVEMENT.size > 0
+      ? prisma.savingsMovement.findMany({
+          where: {
+            userId,
+            id: { in: [...entityIdsByType.SAVINGS_MOVEMENT] },
+          },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    relevantSavingsVehicleIds.size > 0
+      ? prisma.savingsVehicle.findMany({
+          where: {
+            userId,
+            id: { in: [...relevantSavingsVehicleIds] },
+          },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const latestEventIdMap = new Map<string, string>();
@@ -499,6 +640,20 @@ export async function listAuditEvents(
     sectorLinkedAssets.map((a) => `${a.assetClass}::${a.sector}`)
   );
 
+  const existingSavingsGoalIdSet = new Set(existingSavingsGoals.map((g) => g.id));
+  const savingsGoalNameToId = new Map(
+    existingSavingsGoals.map((g) => [g.name, g.id])
+  );
+  const savingsGoalIdsWithMovements = new Set(
+    savingsGoalMovementRows.map((r) => r.goalId)
+  );
+  const existingSavingsMovementIdSet = new Set(
+    existingSavingsMovements.map((m) => m.id)
+  );
+  const existingSavingsVehicleIdSet = new Set(
+    existingSavingsVehicles.map((v) => v.id)
+  );
+
   const events: AuditEventDTO[] = pageEvents.map((ev) => {
     const entityType = ev.entityType as AuditEntityTypeKey;
     const action = ev.action as AuditActionKey;
@@ -514,6 +669,9 @@ export async function listAuditEvents(
     let currentAssetTransactionIds: string[] | undefined;
     let sectorNameConflictExists: boolean | undefined;
     let sectorHasLinkedAssets: boolean | undefined;
+    let savingsGoalNameConflictExists: boolean | undefined;
+    let savingsGoalHasMovements: boolean | undefined;
+    let savingsParentsExist: boolean | undefined;
 
     if (entityType === "ASSET") {
       currentEntityExists = existingAssetIdSet.has(ev.entityId);
@@ -548,6 +706,28 @@ export async function listAuditEvents(
         sectorNameConflictExists =
           ownerId !== undefined && ownerId !== ev.entityId;
       }
+    } else if (entityType === "SAVINGS_GOAL") {
+      currentEntityExists = existingSavingsGoalIdSet.has(ev.entityId);
+      savingsGoalHasMovements = savingsGoalIdsWithMovements.has(ev.entityId);
+      if (beforeState) {
+        const beforeGoal = beforeState as SavingsGoalSnapshot;
+        const ownerId = savingsGoalNameToId.get(beforeGoal.name);
+        savingsGoalNameConflictExists =
+          ownerId !== undefined && ownerId !== ev.entityId;
+      }
+    } else if (entityType === "SAVINGS_MOVEMENT") {
+      currentEntityExists = existingSavingsMovementIdSet.has(ev.entityId);
+      if (beforeState) {
+        const beforeMov = beforeState as SavingsMovementSnapshot;
+        const primaryOk =
+          existingSavingsGoalIdSet.has(beforeMov.goalId) &&
+          existingSavingsVehicleIdSet.has(beforeMov.vehicleId);
+        const counterpartOk = beforeMov.counterpart
+          ? existingSavingsGoalIdSet.has(beforeMov.counterpart.goalId) &&
+            existingSavingsVehicleIdSet.has(beforeMov.counterpart.vehicleId)
+          : true;
+        savingsParentsExist = primaryOk && counterpartOk;
+      }
     }
 
     const eligibility = evaluateRevertEligibility({
@@ -563,6 +743,9 @@ export async function listAuditEvents(
       currentAssetTransactionIds,
       sectorNameConflictExists,
       sectorHasLinkedAssets,
+      savingsGoalNameConflictExists,
+      savingsGoalHasMovements,
+      savingsParentsExist,
     });
 
     return {
@@ -633,6 +816,9 @@ export async function revertAuditEvent(
     let currentAssetTransactionIds: string[] | undefined;
     let sectorNameConflictExists: boolean | undefined;
     let sectorHasLinkedAssets: boolean | undefined;
+    let savingsGoalNameConflictExists: boolean | undefined;
+    let savingsGoalHasMovements: boolean | undefined;
+    let savingsParentsExist: boolean | undefined;
 
     if (entityType === "ASSET") {
       const currentAsset = await tx.asset.findFirst({
@@ -710,6 +896,66 @@ export async function revertAuditEvent(
         });
         sectorNameConflictExists = Boolean(conflict);
       }
+    } else if (entityType === "SAVINGS_GOAL") {
+      const currentSavingsGoal = await tx.savingsGoal.findFirst({
+        where: { id: target.entityId, userId },
+        select: { id: true },
+      });
+      currentEntityExists = Boolean(currentSavingsGoal);
+
+      if (currentSavingsGoal) {
+        const linkedMov = await tx.savingsMovement.findFirst({
+          where: { userId, goalId: target.entityId },
+          select: { id: true },
+        });
+        savingsGoalHasMovements = Boolean(linkedMov);
+      }
+
+      if (beforeState) {
+        const beforeGoal = beforeState as SavingsGoalSnapshot;
+        const conflict = await tx.savingsGoal.findFirst({
+          where: {
+            userId,
+            name: beforeGoal.name,
+            id: { not: target.entityId },
+          },
+          select: { id: true },
+        });
+        savingsGoalNameConflictExists = Boolean(conflict);
+      }
+    } else if (entityType === "SAVINGS_MOVEMENT") {
+      const currentMov = await tx.savingsMovement.findFirst({
+        where: { id: target.entityId, userId },
+        select: { id: true },
+      });
+      currentEntityExists = Boolean(currentMov);
+
+      if (beforeState) {
+        const beforeMov = beforeState as SavingsMovementSnapshot;
+        const goalIds = [
+          beforeMov.goalId,
+          ...(beforeMov.counterpart ? [beforeMov.counterpart.goalId] : []),
+        ];
+        const vehicleIds = [
+          beforeMov.vehicleId,
+          ...(beforeMov.counterpart ? [beforeMov.counterpart.vehicleId] : []),
+        ];
+        const uniqueGoalIds = [...new Set(goalIds)];
+        const uniqueVehicleIds = [...new Set(vehicleIds)];
+        const [foundGoals, foundVehicles] = await Promise.all([
+          tx.savingsGoal.findMany({
+            where: { userId, id: { in: uniqueGoalIds } },
+            select: { id: true },
+          }),
+          tx.savingsVehicle.findMany({
+            where: { userId, id: { in: uniqueVehicleIds } },
+            select: { id: true },
+          }),
+        ]);
+        savingsParentsExist =
+          foundGoals.length === uniqueGoalIds.length &&
+          foundVehicles.length === uniqueVehicleIds.length;
+      }
     }
 
     const eligibility = evaluateRevertEligibility({
@@ -725,6 +971,9 @@ export async function revertAuditEvent(
       currentAssetTransactionIds,
       sectorNameConflictExists,
       sectorHasLinkedAssets,
+      savingsGoalNameConflictExists,
+      savingsGoalHasMovements,
+      savingsParentsExist,
     });
 
     if (!eligibility.canRevert) {
@@ -939,6 +1188,149 @@ export async function revertAuditEvent(
         }
         const snap = toSectorGoalSnapshot(updated);
         nextLabel = buildSectorGoalEntityLabel(snap);
+        nextAfterState = snap;
+      }
+    } else if (entityType === "SAVINGS_GOAL") {
+      const before = beforeState as SavingsGoalSnapshot | null;
+      const after = afterState as SavingsGoalSnapshot | null;
+
+      if (!before && after) {
+        await tx.savingsGoal.delete({ where: { id: target.entityId } });
+        nextLabel = after.name;
+      } else if (before && !after) {
+        if (before.isEmergencyReserve) {
+          await tx.savingsGoal.updateMany({
+            where: { userId, isEmergencyReserve: true },
+            data: { isEmergencyReserve: false },
+          });
+        }
+        await tx.savingsGoal.create({
+          data: {
+            id: before.id,
+            userId,
+            name: before.name,
+            targetAmount: before.targetAmount,
+            targetDate: before.targetDate
+              ? new Date(`${before.targetDate.slice(0, 10)}T12:00:00.000Z`)
+              : null,
+            isEmergencyReserve: before.isEmergencyReserve,
+            isClosed: before.isClosed,
+            sortOrder: before.sortOrder,
+          },
+        });
+        nextLabel = before.name;
+      } else if (before && after) {
+        if (before.isEmergencyReserve) {
+          await tx.savingsGoal.updateMany({
+            where: { userId, isEmergencyReserve: true, id: { not: target.entityId } },
+            data: { isEmergencyReserve: false },
+          });
+        }
+        const updated = await tx.savingsGoal.update({
+          where: { id: target.entityId },
+          data: {
+            name: before.name,
+            targetAmount: before.targetAmount,
+            targetDate: before.targetDate
+              ? new Date(`${before.targetDate.slice(0, 10)}T12:00:00.000Z`)
+              : null,
+            isEmergencyReserve: before.isEmergencyReserve,
+            isClosed: before.isClosed,
+            sortOrder: before.sortOrder,
+          },
+        });
+        const snap = toSavingsGoalSnapshot(updated);
+        nextLabel = snap.name;
+        nextAfterState = snap;
+      }
+    } else if (entityType === "SAVINGS_MOVEMENT") {
+      const before = beforeState as SavingsMovementSnapshot | null;
+      const after = afterState as SavingsMovementSnapshot | null;
+
+      if (!before && after) {
+        // Undo creation/restoration -> delete movement (and counterpart if transfer)
+        const idsToDelete = [
+          after.id,
+          ...(after.counterpart ? [after.counterpart.id] : []),
+        ];
+        await tx.monthlyAllocation.updateMany({
+          where: { userId, linkedMovementId: { in: idsToDelete } },
+          data: { linkedMovementId: null },
+        });
+        await tx.savingsMovement.deleteMany({
+          where: { userId, id: { in: idsToDelete } },
+        });
+        nextLabel = buildSavingsMovementEntityLabel(after);
+      } else if (before && !after) {
+        // Undo deletion -> recreate movement (and counterpart if transfer)
+        await tx.savingsMovement.create({
+          data: {
+            id: before.id,
+            userId,
+            goalId: before.goalId,
+            vehicleId: before.vehicleId,
+            date: new Date(before.date),
+            type: before.type,
+            signedAmount: before.signedAmount,
+            transferGroupId: before.transferGroupId,
+            notes: before.notes,
+          },
+        });
+        if (before.counterpart) {
+          await tx.savingsMovement.create({
+            data: {
+              id: before.counterpart.id,
+              userId,
+              goalId: before.counterpart.goalId,
+              vehicleId: before.counterpart.vehicleId,
+              date: new Date(before.counterpart.date),
+              type: before.counterpart.type,
+              signedAmount: before.counterpart.signedAmount,
+              transferGroupId: before.counterpart.transferGroupId,
+              notes: before.counterpart.notes,
+            },
+          });
+        }
+        nextLabel = buildSavingsMovementEntityLabel(before);
+      } else if (before && after) {
+        // Undo update -> restore fields (and counterpart if transfer)
+        const updatedPrimary = await tx.savingsMovement.update({
+          where: { id: target.entityId },
+          data: {
+            goalId: before.goalId,
+            vehicleId: before.vehicleId,
+            date: new Date(before.date),
+            type: before.type,
+            signedAmount: before.signedAmount,
+            transferGroupId: before.transferGroupId,
+            notes: before.notes,
+          },
+          include: {
+            goal: { select: { id: true, name: true } },
+            vehicle: { select: { id: true, name: true } },
+          },
+        });
+        let updatedCounterpart: SavingsMovementWithInfo | null = null;
+        if (before.counterpart) {
+          updatedCounterpart = await tx.savingsMovement.update({
+            where: { id: before.counterpart.id },
+            data: {
+              goalId: before.counterpart.goalId,
+              vehicleId: before.counterpart.vehicleId,
+              date: new Date(before.counterpart.date),
+              type: before.counterpart.type,
+              signedAmount: before.counterpart.signedAmount,
+              transferGroupId: before.counterpart.transferGroupId,
+              notes: before.counterpart.notes,
+            },
+            include: {
+              goal: { select: { id: true, name: true } },
+              vehicle: { select: { id: true, name: true } },
+            },
+          });
+        }
+        const snap = toSavingsMovementSnapshot(updatedPrimary, updatedCounterpart);
+        nextLabel = buildSavingsMovementEntityLabel(snap);
         nextAfterState = snap;
       }
     }

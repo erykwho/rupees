@@ -14,6 +14,14 @@ export function userFixedIncomeTag(userId: string): string {
   return `fixed-income:${userId}`;
 }
 
+export function userSavingsTag(userId: string): string {
+  return `savings:${userId}`;
+}
+
+export function userMonthlyBudgetTag(userId: string): string {
+  return `monthly-budget:${userId}`;
+}
+
 export function getAllUserFinancialTags(userId: string): string[] {
   return [
     userPortfolioTag(userId),
@@ -22,23 +30,42 @@ export function getAllUserFinancialTags(userId: string): string[] {
   ];
 }
 
-/**
- * Immediately expires all per-user financial server caches so subsequent reads
- * always reflect the user's own mutations (read-your-own-writes).
- * Safely no-ops outside a Next.js server runtime (e.g. unit tests / CLI scripts).
- */
-export function invalidateUserFinancialCaches(userId: string): void {
+function expireTags(tags: string[]): void {
   if (process.env.NODE_ENV === "test") {
     return;
   }
 
-  for (const tag of getAllUserFinancialTags(userId)) {
+  for (const tag of tags) {
     try {
       revalidateTag(tag, { expire: 0 });
     } catch {
       // Ignore outside Next.js request/cache lifecycle (e.g. scripts or tests)
     }
   }
+}
+
+/**
+ * Immediately expires all per-user long-term financial server caches so subsequent reads
+ * always reflect the user's own mutations (read-your-own-writes).
+ * Safely no-ops outside a Next.js server runtime (e.g. unit tests / CLI scripts).
+ */
+export function invalidateUserFinancialCaches(userId: string): void {
+  expireTags(getAllUserFinancialTags(userId));
+}
+
+/**
+ * Expires per-user Savings (Caixinhas) and Monthly Budget caches (since monthly allocations
+ * reference active savings goals and balances).
+ */
+export function invalidateUserSavingsCaches(userId: string): void {
+  expireTags([userSavingsTag(userId), userMonthlyBudgetTag(userId)]);
+}
+
+/**
+ * Expires per-user Monthly Budget caches so home/month reads reflect mutations immediately.
+ */
+export function invalidateUserMonthlyBudgetCaches(userId: string): void {
+  expireTags([userMonthlyBudgetTag(userId)]);
 }
 
 /**

@@ -11,20 +11,43 @@ import {
   formatPct,
   formatQty,
 } from "./types";
+import {
+  SAVINGS_MOVEMENT_TYPE_LABELS,
+  type SavingsMovementTypeKey,
+} from "./savings";
 import { MASKED_BRL, MASKED_QTY, MASKED_USD } from "../privacy";
 
 export type AuditEntityTypeKey =
   | "ASSET"
   | "TRANSACTION"
   | "GOAL"
-  | "SECTOR_GOAL";
+  | "SECTOR_GOAL"
+  | "SAVINGS_GOAL"
+  | "SAVINGS_MOVEMENT";
+
+export type AuditPillarFilter = "ALL" | "LONG_TERM" | "SAVINGS";
+
+export const LONG_TERM_AUDIT_ENTITY_TYPES: AuditEntityTypeKey[] = [
+  "ASSET",
+  "TRANSACTION",
+  "GOAL",
+  "SECTOR_GOAL",
+];
+
+export const SAVINGS_AUDIT_ENTITY_TYPES: AuditEntityTypeKey[] = [
+  "SAVINGS_GOAL",
+  "SAVINGS_MOVEMENT",
+];
+
 export type AuditActionKey = "CREATE" | "UPDATE" | "DELETE" | "REVERT";
 
 export const AUDIT_ENTITY_LABELS: Record<AuditEntityTypeKey, string> = {
   ASSET: "Carteira",
   TRANSACTION: "Lançamentos",
-  GOAL: "Objetivos",
+  GOAL: "Alocação",
   SECTOR_GOAL: "Setores",
+  SAVINGS_GOAL: "Caixinhas",
+  SAVINGS_MOVEMENT: "Mov. Caixinhas",
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditActionKey, string> = {
@@ -96,11 +119,40 @@ export interface SectorGoalSnapshot {
   targetPct: number;
 }
 
+export interface SavingsGoalSnapshot {
+  id: string;
+  name: string;
+  targetAmount: number | null;
+  targetDate: string | null;
+  isEmergencyReserve: boolean;
+  isClosed: boolean;
+  sortOrder: number;
+}
+
+export interface SavingsMovementLegSnapshot {
+  id: string;
+  goalId: string;
+  goalName: string;
+  vehicleId: string;
+  vehicleName: string;
+  date: string;
+  type: SavingsMovementTypeKey;
+  signedAmount: number;
+  transferGroupId: string | null;
+  notes: string | null;
+}
+
+export interface SavingsMovementSnapshot extends SavingsMovementLegSnapshot {
+  counterpart?: SavingsMovementLegSnapshot | null;
+}
+
 export type AuditSnapshot =
   | AssetSnapshot
   | TransactionSnapshot
   | GoalSnapshot
-  | SectorGoalSnapshot;
+  | SectorGoalSnapshot
+  | SavingsGoalSnapshot
+  | SavingsMovementSnapshot;
 
 export interface AuditDiffField {
   key: string;
@@ -143,6 +195,9 @@ export interface RevertEligibilityInput {
   currentAssetTransactionIds?: string[];
   sectorNameConflictExists?: boolean;
   sectorHasLinkedAssets?: boolean;
+  savingsGoalNameConflictExists?: boolean;
+  savingsGoalHasMovements?: boolean;
+  savingsParentsExist?: boolean;
 }
 
 function formatMaskedCurrency(
@@ -436,6 +491,186 @@ export function computeAuditDiffs(
     return diffs;
   }
 
+  if (entityType === "SAVINGS_GOAL") {
+    const before = beforeState as SavingsGoalSnapshot | null;
+    const after = afterState as SavingsGoalSnapshot | null;
+    const diffs: AuditDiffField[] = [];
+
+    const pushIfChanged = (
+      key: string,
+      label: string,
+      rawEqual: boolean,
+      beforeStr: string | null,
+      afterStr: string | null,
+      sensitive = false
+    ) => {
+      if (before && after && rawEqual) return;
+      if (beforeStr === null && afterStr === null) return;
+      diffs.push({ key, label, before: beforeStr, after: afterStr, sensitive });
+    };
+
+    pushIfChanged(
+      "name",
+      "Caixinha",
+      before?.name === after?.name,
+      before?.name ?? null,
+      after?.name ?? null
+    );
+    pushIfChanged(
+      "targetAmount",
+      "Valor-alvo",
+      numbersEqual(before?.targetAmount, after?.targetAmount),
+      before?.targetAmount != null
+        ? formatMaskedCurrency(before.targetAmount, "BRL", isPrivate)
+        : before
+          ? "Sem meta"
+          : null,
+      after?.targetAmount != null
+        ? formatMaskedCurrency(after.targetAmount, "BRL", isPrivate)
+        : after
+          ? "Sem meta"
+          : null,
+      true
+    );
+    pushIfChanged(
+      "targetDate",
+      "Prazo",
+      (before?.targetDate ?? null) === (after?.targetDate ?? null),
+      before ? (formatDatePtBR(before.targetDate) ?? "Sem prazo") : null,
+      after ? (formatDatePtBR(after.targetDate) ?? "Sem prazo") : null
+    );
+    pushIfChanged(
+      "isEmergencyReserve",
+      "Reserva de emergência",
+      Boolean(before?.isEmergencyReserve) === Boolean(after?.isEmergencyReserve),
+      before ? (before.isEmergencyReserve ? "Sim" : "Não") : null,
+      after ? (after.isEmergencyReserve ? "Sim" : "Não") : null
+    );
+    pushIfChanged(
+      "isClosed",
+      "Status",
+      Boolean(before?.isClosed) === Boolean(after?.isClosed),
+      before ? (before.isClosed ? "Encerrada" : "Ativa") : null,
+      after ? (after.isClosed ? "Encerrada" : "Ativa") : null
+    );
+
+    return diffs;
+  }
+
+  if (entityType === "SAVINGS_MOVEMENT") {
+    const before = beforeState as SavingsMovementSnapshot | null;
+    const after = afterState as SavingsMovementSnapshot | null;
+    const diffs: AuditDiffField[] = [];
+
+    const pushIfChanged = (
+      key: string,
+      label: string,
+      rawEqual: boolean,
+      beforeStr: string | null,
+      afterStr: string | null,
+      sensitive = false
+    ) => {
+      if (before && after && rawEqual) return;
+      if (beforeStr === null && afterStr === null) return;
+      diffs.push({ key, label, before: beforeStr, after: afterStr, sensitive });
+    };
+
+    const isTransfer = Boolean(
+      before?.counterpart ||
+        after?.counterpart ||
+        before?.type === "TRANSFER_OUT" ||
+        after?.type === "TRANSFER_OUT"
+    );
+
+    pushIfChanged(
+      "type",
+      "Tipo",
+      before?.type === after?.type && Boolean(before?.counterpart) === Boolean(after?.counterpart),
+      before
+        ? before.counterpart
+          ? "Transferência"
+          : SAVINGS_MOVEMENT_TYPE_LABELS[before.type]
+        : null,
+      after
+        ? after.counterpart
+          ? "Transferência"
+          : SAVINGS_MOVEMENT_TYPE_LABELS[after.type]
+        : null
+    );
+
+    pushIfChanged(
+      "goalName",
+      isTransfer ? "Origem (caixinha)" : "Caixinha",
+      before?.goalId === after?.goalId && before?.goalName === after?.goalName,
+      before?.goalName ?? null,
+      after?.goalName ?? null
+    );
+    pushIfChanged(
+      "vehicleName",
+      isTransfer ? "Origem (produto)" : "Produto",
+      before?.vehicleId === after?.vehicleId &&
+        before?.vehicleName === after?.vehicleName,
+      before?.vehicleName ?? null,
+      after?.vehicleName ?? null
+    );
+
+    if (isTransfer) {
+      pushIfChanged(
+        "destGoalName",
+        "Destino (caixinha)",
+        before?.counterpart?.goalId === after?.counterpart?.goalId &&
+          before?.counterpart?.goalName === after?.counterpart?.goalName,
+        before?.counterpart?.goalName ?? null,
+        after?.counterpart?.goalName ?? null
+      );
+      pushIfChanged(
+        "destVehicleName",
+        "Destino (produto)",
+        before?.counterpart?.vehicleId === after?.counterpart?.vehicleId &&
+          before?.counterpart?.vehicleName === after?.counterpart?.vehicleName,
+        before?.counterpart?.vehicleName ?? null,
+        after?.counterpart?.vehicleName ?? null
+      );
+    }
+
+    pushIfChanged(
+      "date",
+      "Data",
+      before?.date?.slice(0, 10) === after?.date?.slice(0, 10),
+      formatDatePtBR(before?.date),
+      formatDatePtBR(after?.date)
+    );
+    pushIfChanged(
+      "signedAmount",
+      "Valor",
+      numbersEqual(before?.signedAmount, after?.signedAmount),
+      before
+        ? formatMaskedCurrency(
+            isTransfer ? Math.abs(before.signedAmount) : before.signedAmount,
+            "BRL",
+            isPrivate
+          )
+        : null,
+      after
+        ? formatMaskedCurrency(
+            isTransfer ? Math.abs(after.signedAmount) : after.signedAmount,
+            "BRL",
+            isPrivate
+          )
+        : null,
+      true
+    );
+    pushIfChanged(
+      "notes",
+      "Observações",
+      (before?.notes ?? "") === (after?.notes ?? ""),
+      before?.notes ?? null,
+      after?.notes ?? null
+    );
+
+    return diffs;
+  }
+
   // GOAL
   const before = beforeState as GoalSnapshot | null;
   const after = afterState as GoalSnapshot | null;
@@ -549,13 +784,71 @@ export function buildEventSummary(
     return `${after?.name ?? entityLabel} · ${preview}${diffs.length > 2 ? ` (+${diffs.length - 2})` : ""}`;
   }
 
+  if (entityType === "SAVINGS_GOAL") {
+    const before = beforeState as SavingsGoalSnapshot | null;
+    const after = afterState as SavingsGoalSnapshot | null;
+    if (!before && after) {
+      const prefix = action === "REVERT" ? "Caixinha restaurada" : "Nova caixinha";
+      const meta =
+        after.targetAmount != null
+          ? ` · Meta ${formatMaskedCurrency(after.targetAmount, "BRL", isPrivate)}`
+          : "";
+      return `${prefix}: ${after.name}${meta}`;
+    }
+    if (before && !after) {
+      const prefix = action === "REVERT" ? "Criação desfeita" : "Caixinha excluída";
+      return `${prefix}: ${before.name}`;
+    }
+    const diffs = computeAuditDiffs(entityType, beforeState, afterState, { isPrivate });
+    if (diffs.length === 0) return `${entityLabel} atualizada`;
+    const preview = diffs
+      .slice(0, 2)
+      .map((d) => `${d.label}: ${d.before ?? "—"} → ${d.after ?? "—"}`)
+      .join(" · ");
+    return `${after?.name ?? entityLabel} · ${preview}${diffs.length > 2 ? ` (+${diffs.length - 2})` : ""}`;
+  }
+
+  if (entityType === "SAVINGS_MOVEMENT") {
+    const before = beforeState as SavingsMovementSnapshot | null;
+    const after = afterState as SavingsMovementSnapshot | null;
+    if (!before && after) {
+      if (after.counterpart) {
+        const amt = formatMaskedCurrency(Math.abs(after.signedAmount), "BRL", isPrivate);
+        const verb = action === "REVERT" ? "Transferência restaurada" : "Transferência";
+        return `${verb}: ${after.goalName} → ${after.counterpart.goalName} (${amt})`;
+      }
+      const label = SAVINGS_MOVEMENT_TYPE_LABELS[after.type];
+      const amt = formatMaskedCurrency(after.signedAmount, "BRL", isPrivate);
+      const verb = action === "REVERT" ? "Movimentação restaurada" : label;
+      return `${verb} em ${after.goalName} (${amt} · ${after.vehicleName})`;
+    }
+    if (before && !after) {
+      if (before.counterpart) {
+        const amt = formatMaskedCurrency(Math.abs(before.signedAmount), "BRL", isPrivate);
+        const verb = action === "REVERT" ? "Transferência desfeita" : "Transferência excluída";
+        return `${verb}: ${before.goalName} → ${before.counterpart.goalName} (${amt})`;
+      }
+      const label = SAVINGS_MOVEMENT_TYPE_LABELS[before.type];
+      const amt = formatMaskedCurrency(before.signedAmount, "BRL", isPrivate);
+      const verb = action === "REVERT" ? "Movimentação desfeita" : `${label} excluído`;
+      return `${verb}: ${before.goalName} (${amt})`;
+    }
+    const diffs = computeAuditDiffs(entityType, beforeState, afterState, { isPrivate });
+    if (diffs.length === 0) return `Movimentação ${entityLabel} atualizada`;
+    const preview = diffs
+      .slice(0, 2)
+      .map((d) => `${d.label}: ${d.before ?? "—"} → ${d.after ?? "—"}`)
+      .join(" · ");
+    return `${after?.goalName ?? entityLabel} · ${preview}${diffs.length > 2 ? ` (+${diffs.length - 2})` : ""}`;
+  }
+
   // GOAL
   if (!beforeState && afterState) {
     const goal = afterState as GoalSnapshot;
-    return `Objetivos iniciais: RF ${formatPct(goal.fixedIncomePct, 0)} / RV ${formatPct(goal.variableIncomePct, 0)}`;
+    return `Alocação inicial: RF ${formatPct(goal.fixedIncomePct, 0)} / RV ${formatPct(goal.variableIncomePct, 0)}`;
   }
   const diffs = computeAuditDiffs(entityType, beforeState, afterState, { isPrivate });
-  if (diffs.length === 0) return "Objetivos de alocação atualizados";
+  if (diffs.length === 0) return "Metas de alocação atualizadas";
   const preview = diffs
     .slice(0, 2)
     .map((d) => `${d.label}: ${d.before ?? "—"} → ${d.after ?? "—"}`)
@@ -612,7 +905,37 @@ export function buildRevertDescription(
     return `Restaurar os dados anteriores do setor ${before?.name ?? ""}.`;
   }
 
-  return "Restaurar os percentuais anteriores dos objetivos de alocação.";
+  if (entityType === "SAVINGS_GOAL") {
+    const before = beforeState as SavingsGoalSnapshot | null;
+    const after = afterState as SavingsGoalSnapshot | null;
+    if (!before && after) {
+      return `Remover a caixinha "${after.name}".`;
+    }
+    if (before && !after) {
+      return `Restaurar a caixinha "${before.name}".`;
+    }
+    return `Restaurar os dados anteriores da caixinha "${before?.name ?? ""}".`;
+  }
+
+  if (entityType === "SAVINGS_MOVEMENT") {
+    const before = beforeState as SavingsMovementSnapshot | null;
+    const after = afterState as SavingsMovementSnapshot | null;
+    if (!before && after) {
+      if (after.counterpart) {
+        return `Remover a transferência entre "${after.goalName}" e "${after.counterpart.goalName}".`;
+      }
+      return `Remover a movimentação em "${after.goalName}".`;
+    }
+    if (before && !after) {
+      if (before.counterpart) {
+        return `Restaurar a transferência entre "${before.goalName}" e "${before.counterpart.goalName}".`;
+      }
+      return `Restaurar a movimentação em "${before.goalName}".`;
+    }
+    return `Restaurar os dados anteriores da movimentação em "${before?.goalName ?? ""}".`;
+  }
+
+  return "Restaurar os percentuais anteriores da alocação.";
 }
 
 export function evaluateRevertEligibility(
@@ -677,6 +1000,14 @@ export function evaluateRevertEligibility(
       };
     }
 
+    if (input.entityType === "SAVINGS_GOAL" && input.savingsGoalHasMovements) {
+      return {
+        canRevert: false,
+        reason:
+          "Esta caixinha possui movimentações vinculadas. Remova ou reverta as movimentações antes de desfazer este evento.",
+      };
+    }
+
     return { canRevert: true, reason: null };
   }
 
@@ -685,7 +1016,7 @@ export function evaluateRevertEligibility(
     if (input.currentEntityExists) {
       return {
         canRevert: false,
-        reason: "Este item já existe novamente na carteira.",
+        reason: "Este item já existe novamente.",
       };
     }
 
@@ -717,6 +1048,24 @@ export function evaluateRevertEligibility(
           reason: `O ativo ${beforeTx.assetTicker} não existe mais. Reverta a exclusão do ativo primeiro.`,
         };
       }
+    }
+
+    if (input.entityType === "SAVINGS_GOAL") {
+      const beforeGoal = input.beforeState as SavingsGoalSnapshot;
+      if (input.savingsGoalNameConflictExists) {
+        return {
+          canRevert: false,
+          reason: `Já existe outra caixinha chamada "${beforeGoal.name}".`,
+        };
+      }
+    }
+
+    if (input.entityType === "SAVINGS_MOVEMENT" && !input.savingsParentsExist) {
+      return {
+        canRevert: false,
+        reason:
+          "A caixinha ou o produto vinculados a esta movimentação não existem mais.",
+      };
     }
 
     return { canRevert: true, reason: null };
@@ -752,6 +1101,25 @@ export function evaluateRevertEligibility(
       return {
         canRevert: false,
         reason: `O ativo ${beforeTx.assetTicker} não existe mais na carteira.`,
+      };
+    }
+
+    if (
+      input.entityType === "SAVINGS_GOAL" &&
+      input.savingsGoalNameConflictExists
+    ) {
+      const beforeGoal = input.beforeState as SavingsGoalSnapshot;
+      return {
+        canRevert: false,
+        reason: `Já existe outra caixinha chamada "${beforeGoal.name}".`,
+      };
+    }
+
+    if (input.entityType === "SAVINGS_MOVEMENT" && !input.savingsParentsExist) {
+      return {
+        canRevert: false,
+        reason:
+          "A caixinha ou o produto anteriores não existem mais para restaurar esta movimentação.",
       };
     }
 

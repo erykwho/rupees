@@ -350,4 +350,96 @@ describe("evaluateRevertEligibility", () => {
     });
     expect(allowedUpdateRevert.canRevert).toBe(true);
   });
+
+  it("gera diffs, resumos mascarados e regras de reversão para SAVINGS_GOAL e SAVINGS_MOVEMENT (incluindo transferência)", () => {
+    const goalBefore = {
+      id: "sg-1",
+      name: "Reserva de Emergência",
+      targetAmount: 100000,
+      targetDate: "2028-07-01",
+      isEmergencyReserve: true,
+      isClosed: false,
+      sortOrder: 0,
+    };
+    const goalAfter = {
+      ...goalBefore,
+      targetAmount: 120000,
+      isClosed: false,
+    };
+
+    const goalDiffs = computeAuditDiffs("SAVINGS_GOAL", goalBefore, goalAfter, {
+      isPrivate: true,
+    });
+    expect(goalDiffs).toHaveLength(1);
+    expect(goalDiffs[0]).toMatchObject({
+      key: "targetAmount",
+      before: "R$ •••••",
+      after: "R$ •••••",
+      sensitive: true,
+    });
+
+    const blockedGoalCreateRevert = evaluateRevertEligibility({
+      entityType: "SAVINGS_GOAL",
+      action: "CREATE",
+      beforeState: null,
+      afterState: goalAfter,
+      isLatestForEntity: true,
+      isReverted: false,
+      currentEntityExists: true,
+      savingsGoalHasMovements: true,
+    });
+    expect(blockedGoalCreateRevert.canRevert).toBe(false);
+    expect(blockedGoalCreateRevert.reason).toContain("movimentações");
+
+    const transferSnap = {
+      id: "mov-out",
+      goalId: "sg-1",
+      goalName: "Fundo Gatos",
+      vehicleId: "v-1",
+      vehicleName: "Tesouro Selic 2031",
+      date: "2026-10-01T12:00:00.000Z",
+      type: "TRANSFER_OUT" as const,
+      signedAmount: -500,
+      transferGroupId: "tr-1",
+      notes: "Remanejamento",
+      counterpart: {
+        id: "mov-in",
+        goalId: "sg-2",
+        goalName: "Fundo reforma",
+        vehicleId: "v-1",
+        vehicleName: "Tesouro Selic 2031",
+        date: "2026-10-01T12:00:00.000Z",
+        type: "TRANSFER_IN" as const,
+        signedAmount: 500,
+        transferGroupId: "tr-1",
+        notes: "Remanejamento",
+      },
+    };
+
+    const summary = buildEventSummary(
+      "SAVINGS_MOVEMENT",
+      "CREATE",
+      "Fundo Gatos → Fundo reforma",
+      null,
+      transferSnap
+    );
+    expect(summary).toContain("Transferência: Fundo Gatos → Fundo reforma");
+
+    const desc = buildRevertDescription("SAVINGS_MOVEMENT", null, transferSnap);
+    expect(desc).toContain("Fundo Gatos");
+    expect(desc).toContain("Fundo reforma");
+
+    const blockedRestoreMissingParent = evaluateRevertEligibility({
+      entityType: "SAVINGS_MOVEMENT",
+      action: "DELETE",
+      beforeState: transferSnap,
+      afterState: null,
+      isLatestForEntity: true,
+      isReverted: false,
+      currentEntityExists: false,
+      savingsParentsExist: false,
+    });
+    expect(blockedRestoreMissingParent.canRevert).toBe(false);
+  });
 });
+

@@ -26,17 +26,21 @@ import { cn } from "@/lib/utils";
 
 interface ContributionPlannerProps {
   initialSummary: PortfolioSummary;
+  initialAmountBRL?: number;
 }
 
 export function ContributionPlanner({
   initialSummary,
+  initialAmountBRL,
 }: ContributionPlannerProps) {
   const router = useRouter();
   const { isPrivate } = usePrivacy();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [summary, setSummary] = useState<PortfolioSummary>(initialSummary);
-  const [amountInput, setAmountInput] = useState("1000");
+  const [amountInput, setAmountInput] = useState(
+    initialAmountBRL && initialAmountBRL > 0 ? String(initialAmountBRL) : "1000"
+  );
   const [maxAssets, setMaxAssets] = useState(3);
   const [ignoredClasses, setIgnoredClasses] = useState<InvestmentClassKey[]>(
     []
