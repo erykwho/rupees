@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildClonedMonthPayload,
+  computeCheckingBalanceDelta,
   computeMonthlyBudgetSummary,
   formatMonthLongPtBR,
   formatMonthShortPtBR,
@@ -140,6 +141,87 @@ describe("monthly-budget domain engine", () => {
       { kind: "LONG_TERM_DEPOSIT", name: "Longo prazo", savingsGoalId: null, amount: 500, isExecuted: false, linkedMovementId: null, isRecurring: true, sortOrder: 0 },
       { kind: "SAVINGS_DEPOSIT", name: "Reserva", savingsGoalId: "g-active", amount: 500, isExecuted: false, linkedMovementId: null, isRecurring: true, sortOrder: 1 },
     ]);
+  });
+
+  it("computes checking balance deltas for completing and uncompleting monthly items and preserves finalSurplus", () => {
+    // Marking completed (false -> true)
+    expect(
+      computeCheckingBalanceDelta({ kind: "INCOME", amount: 9562.98, wasCompleted: false, nextCompleted: true })
+    ).toBe(9562.98);
+    expect(
+      computeCheckingBalanceDelta({ kind: "EXPENSE", amount: 4600, wasCompleted: false, nextCompleted: true })
+    ).toBe(-4600);
+    expect(
+      computeCheckingBalanceDelta({ kind: "LONG_TERM_DEPOSIT", amount: 500, wasCompleted: false, nextCompleted: true })
+    ).toBe(-500);
+    expect(
+      computeCheckingBalanceDelta({ kind: "SAVINGS_DEPOSIT", amount: 500, wasCompleted: false, nextCompleted: true })
+    ).toBe(-500);
+    expect(
+      computeCheckingBalanceDelta({ kind: "SAVINGS_WITHDRAWAL", amount: 5000, wasCompleted: false, nextCompleted: true })
+    ).toBe(5000);
+
+    // Unmarking completed (true -> false) reverses sign
+    expect(
+      computeCheckingBalanceDelta({ kind: "INCOME", amount: 9562.98, wasCompleted: true, nextCompleted: false })
+    ).toBe(-9562.98);
+    expect(
+      computeCheckingBalanceDelta({ kind: "EXPENSE", amount: 4600, wasCompleted: true, nextCompleted: false })
+    ).toBe(4600);
+    expect(
+      computeCheckingBalanceDelta({ kind: "LONG_TERM_DEPOSIT", amount: 500, wasCompleted: true, nextCompleted: false })
+    ).toBe(500);
+    expect(
+      computeCheckingBalanceDelta({ kind: "SAVINGS_DEPOSIT", amount: 500, wasCompleted: true, nextCompleted: false })
+    ).toBe(500);
+    expect(
+      computeCheckingBalanceDelta({ kind: "SAVINGS_WITHDRAWAL", amount: 5000, wasCompleted: true, nextCompleted: false })
+    ).toBe(-5000);
+
+    // Idempotency: no transition or zero amount produces 0 (never -0)
+    expect(
+      computeCheckingBalanceDelta({ kind: "EXPENSE", amount: 100, wasCompleted: true, nextCompleted: true })
+    ).toBe(0);
+    expect(
+      Object.is(
+        computeCheckingBalanceDelta({ kind: "EXPENSE", amount: 0, wasCompleted: false, nextCompleted: true }),
+        0
+      )
+    ).toBe(true);
+
+    // Cash-flow invariance: adjusting checkingBalance when marking items keeps finalSurplus identical
+    const baseInput = {
+      id: "m-inv",
+      year: 2026,
+      month: 11,
+      checkingBalance: 10000,
+      reportDate: "2026-11-10T12:00:00.000Z",
+      notes: null,
+      incomes: [{ id: "i1", name: "Salário", amount: 5000, isReceived: false, isRecurring: true, sortOrder: 0 }],
+      expenses: [{ id: "e1", name: "Aluguel", category: "BILL" as const, amount: 4000, isUnexpected: false, isPaid: false, isRecurring: true, sortOrder: 0 }],
+      allocations: [
+        { id: "a1", kind: "SAVINGS_DEPOSIT" as const, name: "Reserva", savingsGoalId: "g1", amount: 1000, isExecuted: false, linkedMovementId: null, isRecurring: true, sortOrder: 0 },
+        { id: "a2", kind: "SAVINGS_WITHDRAWAL" as const, name: "Saque", savingsGoalId: "g2", amount: 2000, isExecuted: false, linkedMovementId: null, isRecurring: false, sortOrder: 1 },
+      ],
+    };
+
+    const before = computeMonthlyBudgetSummary(baseInput);
+    const totalDelta =
+      computeCheckingBalanceDelta({ kind: "INCOME", amount: 5000, wasCompleted: false, nextCompleted: true }) +
+      computeCheckingBalanceDelta({ kind: "EXPENSE", amount: 4000, wasCompleted: false, nextCompleted: true }) +
+      computeCheckingBalanceDelta({ kind: "SAVINGS_DEPOSIT", amount: 1000, wasCompleted: false, nextCompleted: true }) +
+      computeCheckingBalanceDelta({ kind: "SAVINGS_WITHDRAWAL", amount: 2000, wasCompleted: false, nextCompleted: true });
+
+    const after = computeMonthlyBudgetSummary({
+      ...baseInput,
+      checkingBalance: baseInput.checkingBalance + totalDelta,
+      incomes: baseInput.incomes.map((i) => ({ ...i, isReceived: true })),
+      expenses: baseInput.expenses.map((e) => ({ ...e, isPaid: true })),
+      allocations: baseInput.allocations.map((a) => ({ ...a, isExecuted: true })),
+    });
+
+    expect(after.checkingBalance).toBe(12000);
+    expect(after.totals.finalSurplusBRL).toBe(before.totals.finalSurplusBRL);
   });
 
   it("handles month formatting and year rollovers", () => {
