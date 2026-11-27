@@ -1451,7 +1451,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
       {/* MODAL: INCOME */}
       {incomeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {editingIncome ? "Editar receita" : "Nova receita"}
@@ -1475,7 +1475,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   value={incName}
                   onChange={(e) => setIncName(e.target.value)}
                   placeholder="Ex.: Remuneração meio mês, Reembolso"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
               <div>
@@ -1489,7 +1489,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   value={incAmount}
                   onChange={(e) => setIncAmount(e.target.value)}
                   placeholder="0,00"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
               <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200/80 px-3 py-2.5 text-xs font-medium text-slate-700 dark:border-slate-800 dark:text-slate-300">
@@ -1525,7 +1525,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
       {/* MODAL: EXPENSE */}
       {expenseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {editingExpense ? "Editar despesa" : "Nova despesa"}
@@ -1549,11 +1549,11 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   value={expName}
                   onChange={(e) => setExpName(e.target.value)}
                   placeholder="Ex.: Aluguel, Cartão de Crédito, DARF"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2.5">
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Categoria
                   </label>
@@ -1562,7 +1562,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     onChange={(e) =>
                       setExpCategory(e.target.value as MonthlyExpenseCategoryKey)
                     }
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     {(
                       Object.keys(
@@ -1575,7 +1575,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     ))}
                   </select>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Valor (R$)
                   </label>
@@ -1586,7 +1586,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     value={expAmount}
                     onChange={(e) => setExpAmount(e.target.value)}
                     placeholder="0,00"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1637,7 +1637,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
       {/* MODAL: ALLOCATION */}
       {allocModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {editingAlloc ? "Editar aporte / saque" : "Novo aporte / saque"}
@@ -1667,7 +1667,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                       setAllocRecurring(false);
                     }
                   }}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   {(
                     Object.keys(
@@ -1695,7 +1695,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                       );
                       if (chosen) setAllocName(chosen.name);
                     }}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="">Sem vínculo (definir depois)</option>
                     {data.activeSavingsGoals.map((g) => (
@@ -1708,7 +1708,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
               )}
 
               <div className="grid grid-cols-2 gap-2.5">
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Descrição
                   </label>
@@ -1718,10 +1718,10 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     value={allocName}
                     onChange={(e) => setAllocName(e.target.value)}
                     placeholder="Ex.: Longo prazo"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Valor (R$)
                   </label>
@@ -1732,7 +1732,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     value={allocAmount}
                     onChange={(e) => setAllocAmount(e.target.value)}
                     placeholder="500,00"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1771,7 +1771,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
       {/* MODAL: ASSISTED 1-CLICK EXECUTE TO CAIXINHAS */}
       {executeAlloc && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <PiggyBank className="h-4 w-4 text-teal-600 dark:text-teal-400" />
@@ -1802,7 +1802,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   required
                   value={execGoalId}
                   onChange={(e) => setExecGoalId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">Selecione...</option>
                   {data.activeSavingsGoals.map((g) => (
@@ -1834,7 +1834,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                       value={quickVehicleName}
                       onChange={(e) => setQuickVehicleName(e.target.value)}
                       placeholder="Ex.: Tesouro Selic 2031"
-                      className="h-9 flex-1 rounded-xl border border-teal-300 bg-white px-3 text-xs text-slate-900 outline-none dark:border-teal-800 dark:bg-slate-800 dark:text-slate-100"
+                      className="h-9 min-w-0 flex-1 rounded-xl border border-teal-300 bg-white px-3 text-xs text-slate-900 outline-none dark:border-teal-800 dark:bg-slate-800 dark:text-slate-100"
                     />
                     <button
                       type="button"
@@ -1851,7 +1851,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   required
                   value={execVehicleId}
                   onChange={(e) => setExecVehicleId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">Selecione...</option>
                   {data.activeSavingsVehicles.map((v) => (
@@ -1862,8 +1862,8 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2.5">
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Valor (R$)
                   </label>
@@ -1873,10 +1873,10 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     required
                     value={execAmount}
                     onChange={(e) => setExecAmount(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Data
                   </label>
@@ -1885,7 +1885,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                     required
                     value={execDate}
                     onChange={(e) => setExecDate(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 max-w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1899,7 +1899,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   value={execNotes}
                   onChange={(e) => setExecNotes(e.target.value)}
                   placeholder={`Via Controle de ${selectedLabelShort}`}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 

@@ -1224,7 +1224,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
       {/* MODAL: CREATE / EDIT GOAL */}
       {goalModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {editingGoal ? "Editar caixinha" : "Nova caixinha"}
@@ -1250,12 +1250,12 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   value={goalName}
                   onChange={(e) => setGoalName(e.target.value)}
                   placeholder="Ex.: Reserva de Emergência, Viagem, Reforma"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2.5">
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Valor-alvo (opcional)
                   </label>
@@ -1265,10 +1265,10 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                     value={goalTargetAmount}
                     onChange={(e) => setGoalTargetAmount(e.target.value)}
                     placeholder="Sem meta"
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Prazo (opcional)
                   </label>
@@ -1276,7 +1276,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                     type="date"
                     value={goalTargetDate}
                     onChange={(e) => setGoalTargetDate(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 max-w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1342,7 +1342,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
       {/* MODAL: NEW MOVEMENT (DEPOSIT | WITHDRAWAL | TRANSFER | YIELD) */}
       {movementModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 Movimentar caixinha
@@ -1392,7 +1392,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   required
                   value={movGoalId}
                   onChange={(e) => setMovGoalId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">Selecione...</option>
                   {summary.goals.map((g) => (
@@ -1427,7 +1427,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                       value={quickVehicleName}
                       onChange={(e) => setQuickVehicleName(e.target.value)}
                       placeholder="Ex.: Tesouro Selic 2031"
-                      className="h-9 flex-1 rounded-xl border border-emerald-300 bg-white px-3 text-xs text-slate-900 outline-none dark:border-emerald-800 dark:bg-slate-800 dark:text-slate-100"
+                      className="h-9 min-w-0 flex-1 rounded-xl border border-emerald-300 bg-white px-3 text-xs text-slate-900 outline-none dark:border-emerald-800 dark:bg-slate-800 dark:text-slate-100"
                     />
                     <button
                       type="button"
@@ -1445,7 +1445,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   required
                   value={movVehicleId}
                   onChange={(e) => setMovVehicleId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="">Selecione...</option>
                   {summary.vehicles.map((v) => (
@@ -1467,7 +1467,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                       required
                       value={movDestGoalId}
                       onChange={(e) => setMovDestGoalId(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     >
                       <option value="">Selecione...</option>
                       {summary.goals.map((g) => (
@@ -1486,7 +1486,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                       required
                       value={movDestVehicleId}
                       onChange={(e) => setMovDestVehicleId(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     >
                       <option value="">Selecione...</option>
                       {summary.vehicles.map((v) => (
@@ -1499,8 +1499,8 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-2.5">
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     {movementMode === "YIELD_ADJUSTMENT"
                       ? "Ajuste (+/- R$)"
@@ -1515,10 +1515,10 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                     placeholder={
                       movementMode === "YIELD_ADJUSTMENT" ? "Ex.: 45,20 ou -10" : "500,00"
                     }
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
                     Data
                   </label>
@@ -1527,7 +1527,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                     required
                     value={movDate}
                     onChange={(e) => setMovDate(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="h-10 w-full min-w-0 max-w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
@@ -1541,7 +1541,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   value={movNotes}
                   onChange={(e) => setMovNotes(e.target.value)}
                   placeholder="Ex.: Aporte do mês, troca de título..."
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -1569,7 +1569,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
       {/* MODAL: VEHICLE CREATE / EDIT */}
       {vehicleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {editingVehicle ? "Editar produto" : "Novo produto de custódia"}
@@ -1595,7 +1595,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   value={vehicleName}
                   onChange={(e) => setVehicleName(e.target.value)}
                   placeholder="Ex.: Tesouro Selic 2031, CDB Inter"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -1608,7 +1608,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   value={vehicleInstitution}
                   onChange={(e) => setVehicleInstitution(e.target.value)}
                   placeholder="Ex.: Inter, Itaú, XP, Tesouro Direto"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -1648,7 +1648,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
       {/* MODAL: EMERGENCY RESERVE CALCULATOR */}
       {calcModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-lg overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
@@ -1677,7 +1677,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                   value={calcMonthlyExpense}
                   onChange={(e) => setCalcMonthlyExpense(e.target.value)}
                   placeholder="20000"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 font-mono text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -1714,7 +1714,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                               )
                             )
                           }
-                          className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          className="h-8 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                         />
                         {calcScenarios.length > 1 && (
                           <button
@@ -1732,7 +1732,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <select
                           value={scenario.mode}
                           onChange={(e) => {
@@ -1753,7 +1753,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                               )
                             );
                           }}
-                          className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          className="h-8 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                         >
                           <option value="MONTHS">Meses de gasto</option>
                           <option value="FIXED">Valor fixo (R$)</option>
@@ -1774,7 +1774,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                                 )
                               )
                             }
-                            className="h-8 w-20 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            className="h-8 w-20 min-w-0 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                           />
                         ) : (
                           <input
@@ -1794,7 +1794,7 @@ export function SavingsView({ initialSummary }: SavingsViewProps) {
                                 )
                               )
                             }
-                            className="h-8 w-28 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                            className="h-8 w-28 min-w-0 rounded-lg border border-slate-200 bg-white px-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                           />
                         )}
 
