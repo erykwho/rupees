@@ -13,12 +13,16 @@ const {
   const tx = {
     monthlyBudget: {
       create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     monthlyIncome: {
       createMany: vi.fn(),
+      update: vi.fn(),
     },
     monthlyExpense: {
       createMany: vi.fn(),
+      update: vi.fn(),
     },
     monthlyAllocation: {
       createMany: vi.fn(),
@@ -118,6 +122,8 @@ vi.mock("@/lib/server-cache", () => ({
 
 import { GET as getMonthly, POST as createMonthly } from "@/app/api/monthly-budget/route";
 import { PATCH as patchIncome } from "@/app/api/monthly-budget/incomes/[itemId]/route";
+import { PATCH as patchExpense } from "@/app/api/monthly-budget/expenses/[itemId]/route";
+import { PATCH as patchAllocation } from "@/app/api/monthly-budget/allocations/[itemId]/route";
 import { POST as executeToSavings } from "@/app/api/monthly-budget/allocations/[itemId]/execute-to-savings/route";
 
 const USER_A = { id: "user-a", email: "a@example.com" };
@@ -166,6 +172,179 @@ describe("API /api/monthly-budget/**", () => {
       { params: Promise.resolve({ itemId: "other-id" }) }
     );
     expect(res.status).toBe(404);
+  });
+
+  it("atomically subtracts checkingBalance when marking an expense paid with adjustCheckingBalance=true and is idempotent on repeat", async () => {
+    prismaMock.monthlyExpense.findFirst.mockResolvedValueOnce({
+      id: "e1",
+      budgetId: "b-nov",
+      amount: 4600,
+      isPaid: false,
+    });
+    txMock.monthlyExpense.update.mockResolvedValueOnce({
+      id: "e1",
+      name: "Aluguel",
+      category: "BILL",
+      amount: 4600,
+      isUnexpected: false,
+      isPaid: true,
+      isRecurring: true,
+      sortOrder: 0,
+    });
+    txMock.monthlyBudget.findFirst.mockResolvedValueOnce({
+      id: "b-nov",
+      checkingBalance: 10000,
+    });
+    txMock.monthlyBudget.update.mockResolvedValueOnce({
+      checkingBalance: 5400,
+    });
+
+    const res = await patchExpense(
+      jsonRequest("http://localhost/api/monthly-budget/expenses/e1", "PATCH", {
+        isPaid: true,
+        adjustCheckingBalance: true,
+      }),
+      { params: Promise.resolve({ itemId: "e1" }) }
+    );
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.checkingBalance).toBe(5400);
+    expect(payload.checkingBalanceDelta).toBe(-4600);
+    expect(txMock.monthlyBudget.findFirst).toHaveBeenCalledWith({
+      where: { id: "b-nov", userId: USER_A.id },
+      select: { id: true, checkingBalance: true },
+    });
+    expect(txMock.monthlyBudget.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "b-nov" },
+        data: expect.objectContaining({ checkingBalance: 5400 }),
+      })
+    );
+    expect(invalidateUserMonthlyBudgetCachesMock).toHaveBeenCalledWith(USER_A.id);
+
+    // Repeat request when already paid MUST NOT adjust checkingBalance again
+    vi.clearAllMocks();
+    requireUserMock.mockResolvedValue(USER_A);
+    prismaMock.monthlyExpense.findFirst.mockResolvedValueOnce({
+      id: "e1",
+      budgetId: "b-nov",
+      amount: 4600,
+      isPaid: true,
+    });
+    prismaMock.monthlyExpense.update.mockResolvedValueOnce({
+      id: "e1",
+      name: "Aluguel",
+      category: "BILL",
+      amount: 4600,
+      isUnexpected: false,
+      isPaid: true,
+      isRecurring: true,
+      sortOrder: 0,
+    });
+
+    const repeatRes = await patchExpense(
+      jsonRequest("http://localhost/api/monthly-budget/expenses/e1", "PATCH", {
+        isPaid: true,
+        adjustCheckingBalance: true,
+      }),
+      { params: Promise.resolve({ itemId: "e1" }) }
+    );
+    expect(repeatRes.status).toBe(200);
+    const repeatPayload = await repeatRes.json();
+    expect(repeatPayload.checkingBalanceDelta).toBeUndefined();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("atomically adds checkingBalance when marking an income received with adjustCheckingBalance=true", async () => {
+    prismaMock.monthlyIncome.findFirst.mockResolvedValueOnce({
+      id: "i1",
+      budgetId: "b-nov",
+      amount: 9562.98,
+      isReceived: false,
+    });
+    txMock.monthlyIncome.update.mockResolvedValueOnce({
+      id: "i1",
+      name: "Salário",
+      amount: 9562.98,
+      isReceived: true,
+      isRecurring: true,
+      sortOrder: 0,
+    });
+    txMock.monthlyBudget.findFirst.mockResolvedValueOnce({
+      id: "b-nov",
+      checkingBalance: 300,
+    });
+    txMock.monthlyBudget.update.mockResolvedValueOnce({
+      checkingBalance: 9862.98,
+    });
+
+    const res = await patchIncome(
+      jsonRequest("http://localhost/api/monthly-budget/incomes/i1", "PATCH", {
+        isReceived: true,
+        adjustCheckingBalance: true,
+      }),
+      { params: Promise.resolve({ itemId: "i1" }) }
+    );
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.checkingBalance).toBe(9862.98);
+    expect(payload.checkingBalanceDelta).toBe(9562.98);
+    expect(txMock.monthlyBudget.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "b-nov" },
+        data: expect.objectContaining({ checkingBalance: 9862.98 }),
+      })
+    );
+  });
+
+  it("atomically subtracts checkingBalance when completing a long-term allocation with adjustCheckingBalance=true", async () => {
+    prismaMock.monthlyAllocation.findFirst.mockResolvedValueOnce({
+      id: "a-lt",
+      userId: USER_A.id,
+      budgetId: "b-nov",
+      kind: "LONG_TERM_DEPOSIT",
+      name: "Longo prazo",
+      savingsGoalId: null,
+      amount: 500,
+      isExecuted: false,
+      linkedMovementId: null,
+      isRecurring: true,
+      sortOrder: 0,
+    });
+    txMock.monthlyAllocation.update.mockResolvedValueOnce({
+      id: "a-lt",
+      kind: "LONG_TERM_DEPOSIT",
+      name: "Longo prazo",
+      savingsGoalId: null,
+      savingsGoal: null,
+      amount: 500,
+      isExecuted: true,
+      linkedMovementId: null,
+      isRecurring: true,
+      sortOrder: 0,
+    });
+    txMock.monthlyBudget.findFirst.mockResolvedValueOnce({
+      id: "b-nov",
+      checkingBalance: 2500,
+    });
+    txMock.monthlyBudget.update.mockResolvedValueOnce({
+      checkingBalance: 2000,
+    });
+
+    const res = await patchAllocation(
+      jsonRequest("http://localhost/api/monthly-budget/allocations/a-lt", "PATCH", {
+        isExecuted: true,
+        adjustCheckingBalance: true,
+      }),
+      { params: Promise.resolve({ itemId: "a-lt" }) }
+    );
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.checkingBalance).toBe(2000);
+    expect(payload.checkingBalanceDelta).toBe(-500);
   });
 
   it("clones recurring items when creating a new month from a previous month", async () => {
@@ -218,10 +397,11 @@ describe("API /api/monthly-budget/**", () => {
     expect(invalidateUserMonthlyBudgetCachesMock).toHaveBeenCalledWith(USER_A.id);
   });
 
-  it("executes a monthly savings allocation into Caixinhas atomically with AuditEvent and links movementId", async () => {
+  it("executes a monthly savings allocation into Caixinhas atomically with AuditEvent, links movementId, and adjusts checkingBalance when requested", async () => {
     prismaMock.monthlyAllocation.findFirst.mockResolvedValueOnce({
       id: "a-res",
       userId: USER_A.id,
+      budgetId: "b-nov",
       kind: "SAVINGS_DEPOSIT",
       name: "Reserva de Emergência",
       savingsGoalId: "g-res",
@@ -259,6 +439,13 @@ describe("API /api/monthly-budget/**", () => {
       isRecurring: true,
       sortOrder: 0,
     });
+    txMock.monthlyBudget.findFirst.mockResolvedValueOnce({
+      id: "b-nov",
+      checkingBalance: 1500,
+    });
+    txMock.monthlyBudget.update.mockResolvedValueOnce({
+      checkingBalance: 1000,
+    });
 
     const res = await executeToSavings(
       jsonRequest(
@@ -267,12 +454,16 @@ describe("API /api/monthly-budget/**", () => {
         {
           vehicleId: "v-selic",
           date: "2026-11-15",
+          adjustCheckingBalance: true,
         }
       ),
       { params: Promise.resolve({ itemId: "a-res" }) }
     );
 
     expect(res.status).toBe(201);
+    const payload = await res.json();
+    expect(payload.checkingBalance).toBe(1000);
+    expect(payload.checkingBalanceDelta).toBe(-500);
     expect(txMock.savingsMovement.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -284,6 +475,12 @@ describe("API /api/monthly-budget/**", () => {
         }),
       })
     );
+    expect(txMock.monthlyBudget.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "b-nov" },
+        data: expect.objectContaining({ checkingBalance: 1000 }),
+      })
+    );
     expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
     expect(invalidateUserSavingsCachesMock).toHaveBeenCalledWith(USER_A.id);
   });
@@ -292,6 +489,7 @@ describe("API /api/monthly-budget/**", () => {
     prismaMock.monthlyAllocation.findFirst.mockResolvedValueOnce({
       id: "a-res",
       userId: USER_A.id,
+      budgetId: "b-nov",
       kind: "SAVINGS_DEPOSIT",
       name: "Reserva",
       savingsGoalId: "g-res",

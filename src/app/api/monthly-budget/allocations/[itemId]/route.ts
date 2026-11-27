@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authErrorResponse, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeCheckingBalanceDelta } from "@/lib/domain/monthly-budget";
 import { roundMoney } from "@/lib/domain/savings";
 import { invalidateUserMonthlyBudgetCaches } from "@/lib/server-cache";
 
@@ -15,6 +16,7 @@ const updateAllocationSchema = z.object({
   isExecuted: z.boolean().optional(),
   isRecurring: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
+  adjustCheckingBalance: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -63,25 +65,77 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.monthlyAllocation.update({
-      where: { id: itemId },
-      data: {
-        ...(data.kind !== undefined ? { kind: data.kind } : {}),
-        ...(data.name !== undefined ? { name: data.name } : {}),
-        ...(nextSavingsGoalId !== undefined
-          ? { savingsGoalId: nextSavingsGoalId }
-          : {}),
-        ...(data.amount !== undefined ? { amount: roundMoney(data.amount) } : {}),
-        ...(data.isExecuted !== undefined ? { isExecuted: data.isExecuted } : {}),
-        ...(data.isRecurring !== undefined
-          ? { isRecurring: data.isRecurring }
-          : {}),
-        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
-      },
-      include: {
-        savingsGoal: { select: { id: true, name: true } },
-      },
-    });
+    const updateData = {
+      ...(data.kind !== undefined ? { kind: data.kind } : {}),
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(nextSavingsGoalId !== undefined
+        ? { savingsGoalId: nextSavingsGoalId }
+        : {}),
+      ...(data.amount !== undefined ? { amount: roundMoney(data.amount) } : {}),
+      ...(data.isExecuted !== undefined ? { isExecuted: data.isExecuted } : {}),
+      ...(data.isRecurring !== undefined
+        ? { isRecurring: data.isRecurring }
+        : {}),
+      ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
+    };
+
+    const effectiveAmount =
+      data.amount !== undefined
+        ? roundMoney(data.amount)
+        : Number(existing.amount);
+    const balanceDelta =
+      data.adjustCheckingBalance && data.isExecuted !== undefined
+        ? computeCheckingBalanceDelta({
+            kind: nextKind,
+            amount: effectiveAmount,
+            wasCompleted: existing.isExecuted,
+            nextCompleted: data.isExecuted,
+          })
+        : 0;
+
+    let updated;
+    let updatedCheckingBalance: number | undefined;
+
+    if (balanceDelta !== 0) {
+      const txResult = await prisma.$transaction(async (tx) => {
+        const updatedAllocation = await tx.monthlyAllocation.update({
+          where: { id: itemId },
+          data: updateData,
+          include: {
+            savingsGoal: { select: { id: true, name: true } },
+          },
+        });
+        const parentBudget = await tx.monthlyBudget.findFirst({
+          where: { id: existing.budgetId, userId: user.id },
+          select: { id: true, checkingBalance: true },
+        });
+        let nextCheckingBalance: number | undefined;
+        if (parentBudget) {
+          const updatedBudget = await tx.monthlyBudget.update({
+            where: { id: parentBudget.id },
+            data: {
+              checkingBalance: roundMoney(
+                Number(parentBudget.checkingBalance) + balanceDelta
+              ),
+              reportDate: new Date(),
+            },
+            select: { checkingBalance: true },
+          });
+          nextCheckingBalance = Number(updatedBudget.checkingBalance);
+        }
+        return { updatedAllocation, nextCheckingBalance };
+      });
+      updated = txResult.updatedAllocation;
+      updatedCheckingBalance = txResult.nextCheckingBalance;
+    } else {
+      updated = await prisma.monthlyAllocation.update({
+        where: { id: itemId },
+        data: updateData,
+        include: {
+          savingsGoal: { select: { id: true, name: true } },
+        },
+      });
+    }
 
     invalidateUserMonthlyBudgetCaches(user.id);
     return NextResponse.json({
@@ -97,6 +151,12 @@ export async function PATCH(
         isRecurring: updated.isRecurring,
         sortOrder: updated.sortOrder,
       },
+      ...(updatedCheckingBalance !== undefined
+        ? {
+            checkingBalance: updatedCheckingBalance,
+            checkingBalanceDelta: balanceDelta,
+          }
+        : {}),
     });
   } catch (err) {
     const authRes = authErrorResponse(err);

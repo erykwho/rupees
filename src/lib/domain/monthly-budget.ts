@@ -202,6 +202,39 @@ export function getAdjacentYearMonth(
   return { year: nextYear, month: nextMonth };
 }
 
+export type MonthlyCheckingBalanceItemKind =
+  | "INCOME"
+  | "EXPENSE"
+  | "LONG_TERM_DEPOSIT"
+  | "SAVINGS_DEPOSIT"
+  | "SAVINGS_WITHDRAWAL";
+
+/**
+ * Computes the signed adjustment to MonthlyBudget.checkingBalance when an item
+ * transitions between pending and completed states.
+ * - Marking completed (false -> true):
+ *   - INCOME, SAVINGS_WITHDRAWAL: +amount (inflow to checking account)
+ *   - EXPENSE, LONG_TERM_DEPOSIT, SAVINGS_DEPOSIT: -amount (outflow from checking account)
+ * - Unmarking completed (true -> false): exact inverse sign.
+ * - No status change or zero amount: 0.
+ */
+export function computeCheckingBalanceDelta(params: {
+  kind: MonthlyCheckingBalanceItemKind;
+  amount: number;
+  wasCompleted: boolean;
+  nextCompleted: boolean;
+}): number {
+  if (params.wasCompleted === params.nextCompleted) return 0;
+  const absAmount = roundMoney(Math.abs(params.amount));
+  if (absAmount === 0) return 0;
+
+  const isInflow =
+    params.kind === "INCOME" || params.kind === "SAVINGS_WITHDRAWAL";
+  const completedSign = isInflow ? 1 : -1;
+  const direction = params.nextCompleted ? 1 : -1;
+  return roundMoney(absAmount * completedSign * direction);
+}
+
 export function computeMonthlyBudgetSummary(
   input: MonthlyBudgetInput
 ): MonthlyBudgetSummary {

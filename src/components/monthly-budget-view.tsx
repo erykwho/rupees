@@ -29,13 +29,16 @@ import {
   MONTHLY_EXPENSE_CATEGORY_LABELS,
   type MonthlyAllocationItem,
   type MonthlyAllocationKindKey,
+  type MonthlyCheckingBalanceItemKind,
   type MonthlyExpenseCategoryKey,
   type MonthlyExpenseWithShare,
   type MonthlyIncomeItem,
+  computeCheckingBalanceDelta,
   formatMonthLongPtBR,
   formatMonthShortPtBR,
   getAdjacentYearMonth,
 } from "@/lib/domain/monthly-budget";
+import { roundMoney } from "@/lib/domain/savings";
 import { formatPct } from "@/lib/domain/types";
 import type { MonthlyBudgetPageData } from "@/lib/monthly-budget-loader";
 import { CompactKpiStrip } from "@/components/compact-kpi-strip";
@@ -48,6 +51,57 @@ interface MonthlyBudgetViewProps {
 }
 
 type MonthlyTab = "EXPENSES" | "INCOMES" | "ALLOCATIONS";
+
+interface PendingBalanceConfirm {
+  entityType: "INCOME" | "EXPENSE" | "ALLOCATION";
+  kind: MonthlyCheckingBalanceItemKind;
+  itemId: string;
+  name: string;
+  amount: number;
+  wasCompleted: boolean;
+  nextCompleted: boolean;
+}
+
+function getBalanceConfirmKindLabel(kind: MonthlyCheckingBalanceItemKind): string {
+  switch (kind) {
+    case "INCOME":
+      return "Receita";
+    case "EXPENSE":
+      return "Despesa";
+    case "LONG_TERM_DEPOSIT":
+      return "Aporte · Longo Prazo";
+    case "SAVINGS_DEPOSIT":
+      return "Aporte · Caixinha";
+    case "SAVINGS_WITHDRAWAL":
+      return "Saque · Caixinha";
+  }
+}
+
+function getSkipAdjustButtonLabel(item: PendingBalanceConfirm): string {
+  if (!item.nextCompleted) return "Apenas desmarcar";
+  if (item.kind === "INCOME") return "Apenas marcar como recebido";
+  if (item.kind === "EXPENSE") return "Apenas marcar como pago";
+  return "Apenas marcar como concluído";
+}
+
+function getBalanceDeltaDirectionLabel(
+  delta: number,
+  nextCompleted: boolean
+): string {
+  if (delta > 0) {
+    return nextCompleted
+      ? "Acrescentar ao dinheiro atual"
+      : "Devolver ao dinheiro atual";
+  }
+  return nextCompleted
+    ? "Subtrair do dinheiro atual"
+    : "Estornar do dinheiro atual";
+}
+
+function formatSignedMaskedBRL(delta: number, isPrivate: boolean): string {
+  const sign = delta > 0 ? "+" : delta < 0 ? "-" : "";
+  return `${sign}${maskBRL(Math.abs(delta), isPrivate)}`;
+}
 
 function parseBrDecimal(raw: string): number {
   const cleaned = raw.trim().replace(/\s+/g, "").replace(",", ".");
@@ -143,10 +197,16 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
   const [execDate, setExecDate] = useState(getTodayDateInput());
   const [execAmount, setExecAmount] = useState("");
   const [execNotes, setExecNotes] = useState("");
+  const [execAdjustBalance, setExecAdjustBalance] = useState(true);
   const [executingAlloc, setExecutingAlloc] = useState(false);
   const [quickVehicleOpen, setQuickVehicleOpen] = useState(false);
   const [quickVehicleName, setQuickVehicleName] = useState("");
   const [savingQuickVehicle, setSavingQuickVehicle] = useState(false);
+
+  // Checking balance confirmation modal (incomes, expenses, simple allocations)
+  const [pendingBalanceConfirm, setPendingBalanceConfirm] =
+    useState<PendingBalanceConfirm | null>(null);
+  const [confirmingBalanceAction, setConfirmingBalanceAction] = useState(false);
 
   const budget = data.budget;
   const selectedLabelShort = formatMonthShortPtBR(
@@ -312,15 +372,76 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
     }
   }
 
-  async function handleToggleIncome(item: MonthlyIncomeItem) {
-    const res = await fetch(`/api/monthly-budget/incomes/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isReceived: !item.isReceived }),
-    });
-    if (res.ok) {
+  async function submitBalanceConfirmAction(
+    target: PendingBalanceConfirm,
+    adjustCheckingBalance: boolean
+  ) {
+    setConfirmingBalanceAction(true);
+    setFeedback(null);
+    try {
+      const endpoint =
+        target.entityType === "INCOME"
+          ? `/api/monthly-budget/incomes/${target.itemId}`
+          : target.entityType === "EXPENSE"
+            ? `/api/monthly-budget/expenses/${target.itemId}`
+            : `/api/monthly-budget/allocations/${target.itemId}`;
+
+      const payload =
+        target.entityType === "INCOME"
+          ? { isReceived: target.nextCompleted, adjustCheckingBalance }
+          : target.entityType === "EXPENSE"
+            ? { isPaid: target.nextCompleted, adjustCheckingBalance }
+            : { isExecuted: target.nextCompleted, adjustCheckingBalance };
+
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFeedback({
+          type: "error",
+          message: body.error ?? "Erro ao atualizar lançamento.",
+        });
+        return;
+      }
+
+      setPendingBalanceConfirm(null);
+      const appliedDelta =
+        typeof body.checkingBalanceDelta === "number"
+          ? body.checkingBalanceDelta
+          : 0;
+      if (appliedDelta !== 0) {
+        setFeedback({
+          type: "success",
+          message: `${target.name} atualizado · Dinheiro atual ajustado (${formatSignedMaskedBRL(
+            appliedDelta,
+            isPrivate
+          )}).`,
+        });
+      }
       await reloadCurrentMonth();
+    } finally {
+      setConfirmingBalanceAction(false);
     }
+  }
+
+  function handleToggleIncome(item: MonthlyIncomeItem) {
+    const target: PendingBalanceConfirm = {
+      entityType: "INCOME",
+      kind: "INCOME",
+      itemId: item.id,
+      name: item.name,
+      amount: item.amount,
+      wasCompleted: item.isReceived,
+      nextCompleted: !item.isReceived,
+    };
+    if (roundMoney(Math.abs(item.amount)) === 0) {
+      void submitBalanceConfirmAction(target, false);
+      return;
+    }
+    setPendingBalanceConfirm(target);
   }
 
   async function handleDeleteIncome(item: MonthlyIncomeItem) {
@@ -384,15 +505,21 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
     }
   }
 
-  async function handleToggleExpense(item: MonthlyExpenseWithShare) {
-    const res = await fetch(`/api/monthly-budget/expenses/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isPaid: !item.isPaid }),
-    });
-    if (res.ok) {
-      await reloadCurrentMonth();
+  function handleToggleExpense(item: MonthlyExpenseWithShare) {
+    const target: PendingBalanceConfirm = {
+      entityType: "EXPENSE",
+      kind: "EXPENSE",
+      itemId: item.id,
+      name: item.name,
+      amount: item.amount,
+      wasCompleted: item.isPaid,
+      nextCompleted: !item.isPaid,
+    };
+    if (roundMoney(Math.abs(item.amount)) === 0) {
+      void submitBalanceConfirmAction(target, false);
+      return;
     }
+    setPendingBalanceConfirm(target);
   }
 
   async function handleDeleteExpense(item: MonthlyExpenseWithShare) {
@@ -468,15 +595,21 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
     }
   }
 
-  async function handleToggleSimpleAllocation(item: MonthlyAllocationItem) {
-    const res = await fetch(`/api/monthly-budget/allocations/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isExecuted: !item.isExecuted }),
-    });
-    if (res.ok) {
-      await reloadCurrentMonth();
+  function handleToggleSimpleAllocation(item: MonthlyAllocationItem) {
+    const target: PendingBalanceConfirm = {
+      entityType: "ALLOCATION",
+      kind: item.kind,
+      itemId: item.id,
+      name: item.name,
+      amount: item.amount,
+      wasCompleted: item.isExecuted,
+      nextCompleted: !item.isExecuted,
+    };
+    if (roundMoney(Math.abs(item.amount)) === 0) {
+      void submitBalanceConfirmAction(target, false);
+      return;
     }
+    setPendingBalanceConfirm(target);
   }
 
   async function handleDeleteAllocation(item: MonthlyAllocationItem) {
@@ -502,6 +635,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
     setExecDate(getTodayDateInput());
     setExecAmount(String(item.amount));
     setExecNotes("");
+    setExecAdjustBalance(true);
     setQuickVehicleOpen(false);
     setQuickVehicleName("");
   }
@@ -556,6 +690,7 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
             date: execDate,
             amount,
             notes: execNotes.trim() || null,
+            adjustCheckingBalance: execAdjustBalance,
           }),
         }
       );
@@ -568,12 +703,23 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
         return;
       }
       setExecuteAlloc(null);
+      const appliedDelta =
+        typeof body.checkingBalanceDelta === "number"
+          ? body.checkingBalanceDelta
+          : 0;
+      const baseMsg =
+        executeAlloc.kind === "SAVINGS_WITHDRAWAL"
+          ? "Saque registrado na caixinha e marcado no mês"
+          : "Aporte registrado na caixinha e marcado no mês";
       setFeedback({
         type: "success",
         message:
-          executeAlloc.kind === "SAVINGS_WITHDRAWAL"
-            ? "Saque registrado na caixinha e marcado no mês."
-            : "Aporte registrado na caixinha e marcado no mês.",
+          appliedDelta !== 0
+            ? `${baseMsg} · Dinheiro atual ajustado (${formatSignedMaskedBRL(
+                appliedDelta,
+                isPrivate
+              )}).`
+            : `${baseMsg}.`,
       });
       await reloadCurrentMonth();
     } finally {
@@ -584,19 +730,42 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
   async function handleMarkOnlyExecuted() {
     if (!executeAlloc) return;
     setExecutingAlloc(true);
+    setFeedback(null);
     try {
       const res = await fetch(
         `/api/monthly-budget/allocations/${executeAlloc.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isExecuted: true }),
+          body: JSON.stringify({
+            isExecuted: true,
+            adjustCheckingBalance: execAdjustBalance,
+          }),
         }
       );
-      if (res.ok) {
-        setExecuteAlloc(null);
-        await reloadCurrentMonth();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFeedback({
+          type: "error",
+          message: body.error ?? "Erro ao marcar item como executado.",
+        });
+        return;
       }
+      setExecuteAlloc(null);
+      const appliedDelta =
+        typeof body.checkingBalanceDelta === "number"
+          ? body.checkingBalanceDelta
+          : 0;
+      if (appliedDelta !== 0) {
+        setFeedback({
+          type: "success",
+          message: `${executeAlloc.name} concluído · Dinheiro atual ajustado (${formatSignedMaskedBRL(
+            appliedDelta,
+            isPrivate
+          )}).`,
+        });
+      }
+      await reloadCurrentMonth();
     } finally {
       setExecutingAlloc(false);
     }
@@ -1903,6 +2072,79 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                 />
               </div>
 
+              {budget &&
+                (() => {
+                  const parsedExec = parseBrDecimal(execAmount);
+                  const effectiveAmount =
+                    Number.isFinite(parsedExec) && parsedExec > 0
+                      ? parsedExec
+                      : executeAlloc.amount;
+                  const previewDelta = computeCheckingBalanceDelta({
+                    kind: executeAlloc.kind,
+                    amount: effectiveAmount,
+                    wasCompleted: executeAlloc.isExecuted,
+                    nextCompleted: true,
+                  });
+                  if (previewDelta === 0) return null;
+                  const nextBalance = roundMoney(
+                    budget.checkingBalance + previewDelta
+                  );
+                  return (
+                    <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                      <label className="flex cursor-pointer items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={execAdjustBalance}
+                          onChange={(e) =>
+                            setExecAdjustBalance(e.target.checked)
+                          }
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded accent-teal-600"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                              Ajustar dinheiro atual
+                            </span>
+                            <span
+                              className={cn(
+                                "shrink-0 font-mono text-xs font-bold tabular-nums",
+                                previewDelta > 0
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-rose-600 dark:text-rose-400"
+                              )}
+                            >
+                              {formatSignedMaskedBRL(previewDelta, isPrivate)}
+                            </span>
+                          </div>
+                          {execAdjustBalance ? (
+                            <p className="mt-1 flex flex-wrap items-center gap-1 font-mono text-[11px] text-slate-500 tabular-nums dark:text-slate-400">
+                              <span>
+                                Conta:{" "}
+                                {maskBRL(budget.checkingBalance, isPrivate)}
+                              </span>
+                              <ArrowRight className="h-3 w-3 shrink-0" />
+                              <strong
+                                className={cn(
+                                  "font-semibold",
+                                  nextBalance < 0
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-slate-800 dark:text-slate-200"
+                                )}
+                              >
+                                {maskBRL(nextBalance, isPrivate)}
+                              </strong>
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                              O saldo da conta corrente não será alterado.
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                  );
+                })()}
+
               <div className="space-y-2 pt-2">
                 <button
                   type="submit"
@@ -1919,13 +2161,172 @@ export function MonthlyBudgetView({ initialData }: MonthlyBudgetViewProps) {
                   disabled={executingAlloc}
                   className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
-                  Apenas marcar como executado no mês
+                  {execAdjustBalance
+                    ? "Apenas marcar no mês (e ajustar saldo)"
+                    : "Apenas marcar como executado no mês"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* MODAL: CONFIRM CHECKING BALANCE ADJUSTMENT */}
+      {pendingBalanceConfirm &&
+        budget &&
+        (() => {
+          const delta = computeCheckingBalanceDelta({
+            kind: pendingBalanceConfirm.kind,
+            amount: pendingBalanceConfirm.amount,
+            wasCompleted: pendingBalanceConfirm.wasCompleted,
+            nextCompleted: pendingBalanceConfirm.nextCompleted,
+          });
+          const nextBalance = roundMoney(budget.checkingBalance + delta);
+          const isAddition = delta > 0;
+          return (
+            <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4 dark:bg-slate-950/70">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="balance-confirm-title"
+                className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl sm:pb-5 dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Banknote className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <h2
+                      id="balance-confirm-title"
+                      className="truncate text-base font-bold text-slate-900 dark:text-slate-100"
+                    >
+                      {pendingBalanceConfirm.nextCompleted
+                        ? "Ajustar dinheiro atual?"
+                        : "Reverter ajuste no saldo?"}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={confirmingBalanceAction}
+                    onClick={() => setPendingBalanceConfirm(null)}
+                    aria-label="Fechar"
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5 dark:border-slate-800 dark:bg-slate-950/40">
+                  <div className="min-w-0">
+                    <span className="inline-block rounded-md bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {getBalanceConfirmKindLabel(pendingBalanceConfirm.kind)}
+                    </span>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {pendingBalanceConfirm.name}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 font-mono text-sm font-bold tabular-nums",
+                      isAddition
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    )}
+                  >
+                    {formatSignedMaskedBRL(delta, isPrivate)}
+                  </span>
+                </div>
+
+                <div className="mt-3 space-y-2 rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 text-xs dark:border-slate-800 dark:bg-slate-900/60">
+                  <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400">
+                    <span>Dinheiro atual (conta corrente)</span>
+                    <span className="font-mono font-semibold text-slate-800 tabular-nums dark:text-slate-200">
+                      {maskBRL(budget.checkingBalance, isPrivate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400">
+                    <span>
+                      {getBalanceDeltaDirectionLabel(
+                        delta,
+                        pendingBalanceConfirm.nextCompleted
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-mono font-semibold tabular-nums",
+                        isAddition
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-rose-600 dark:text-rose-400"
+                      )}
+                    >
+                      {formatSignedMaskedBRL(delta, isPrivate)}
+                    </span>
+                  </div>
+                  <div className="border-t border-slate-100 pt-2 dark:border-slate-800">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        Novo saldo estimado
+                      </span>
+                      <span
+                        className={cn(
+                          "font-mono text-sm font-bold tabular-nums",
+                          nextBalance < 0
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-emerald-700 dark:text-emerald-400"
+                        )}
+                      >
+                        {maskBRL(nextBalance, isPrivate)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  {pendingBalanceConfirm.nextCompleted
+                    ? "Confirma o ajuste automático do dinheiro atual (conta corrente) ao concluir este lançamento?"
+                    : "Deseja também reverter este valor no dinheiro atual (conta corrente) ao desmarcar?"}
+                </p>
+
+                <div className="mt-4 space-y-2">
+                  <button
+                    type="button"
+                    disabled={confirmingBalanceAction}
+                    onClick={() =>
+                      void submitBalanceConfirmAction(
+                        pendingBalanceConfirm,
+                        true
+                      )
+                    }
+                    className="h-10 w-full rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {confirmingBalanceAction
+                      ? "Atualizando..."
+                      : "Confirmar e ajustar dinheiro atual"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={confirmingBalanceAction}
+                    onClick={() =>
+                      void submitBalanceConfirmAction(
+                        pendingBalanceConfirm,
+                        false
+                      )
+                    }
+                    className="h-9 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {getSkipAdjustButtonLabel(pendingBalanceConfirm)}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={confirmingBalanceAction}
+                    onClick={() => setPendingBalanceConfirm(null)}
+                    className="h-8 w-full rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50 dark:text-slate-400 dark:hover:text-slate-200"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

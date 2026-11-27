@@ -8,7 +8,10 @@ import {
   toSavingsMovementSnapshot,
 } from "@/lib/audit-service";
 import { roundMoney } from "@/lib/domain/savings";
-import { formatMonthShortPtBR } from "@/lib/domain/monthly-budget";
+import {
+  computeCheckingBalanceDelta,
+  formatMonthShortPtBR,
+} from "@/lib/domain/monthly-budget";
 import { invalidateUserSavingsCaches } from "@/lib/server-cache";
 
 const executeToSavingsSchema = z.object({
@@ -19,12 +22,14 @@ const executeToSavingsSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use YYYY-MM-DD)"),
   amount: z.number().positive("O valor deve ser maior que zero").optional(),
   notes: z.string().trim().max(300).nullable().optional(),
+  adjustCheckingBalance: z.boolean().optional(),
 });
 
 /**
  * Assisted 1-click bridge from Monthly Budget (Hoje) to Savings Buckets (Amanhã):
- * atomically creates the DEPOSIT or WITHDRAWAL in SavingsMovement + AuditEvent
- * and marks the MonthlyAllocation as executed with linkedMovementId.
+ * atomically creates the DEPOSIT or WITHDRAWAL in SavingsMovement + AuditEvent,
+ * marks the MonthlyAllocation as executed with linkedMovementId, and optionally
+ * adjusts MonthlyBudget.checkingBalance in the same transaction.
  */
 export async function POST(
   request: Request,
@@ -117,6 +122,14 @@ export async function POST(
       allocation.budget.year,
       allocation.budget.month
     )}`;
+    const balanceDelta = parsed.data.adjustCheckingBalance
+      ? computeCheckingBalanceDelta({
+          kind: allocation.kind,
+          amount,
+          wasCompleted: allocation.isExecuted,
+          nextCompleted: true,
+        })
+      : 0;
 
     const result = await prisma.$transaction(async (tx) => {
       const createdMovement = await tx.savingsMovement.create({
@@ -158,7 +171,28 @@ export async function POST(
         },
       });
 
-      return { movSnap, updatedAllocation };
+      let updatedCheckingBalance: number | undefined;
+      if (balanceDelta !== 0) {
+        const parentBudget = await tx.monthlyBudget.findFirst({
+          where: { id: allocation.budgetId, userId: user.id },
+          select: { id: true, checkingBalance: true },
+        });
+        if (parentBudget) {
+          const updatedBudget = await tx.monthlyBudget.update({
+            where: { id: parentBudget.id },
+            data: {
+              checkingBalance: roundMoney(
+                Number(parentBudget.checkingBalance) + balanceDelta
+              ),
+              reportDate: new Date(),
+            },
+            select: { checkingBalance: true },
+          });
+          updatedCheckingBalance = Number(updatedBudget.checkingBalance);
+        }
+      }
+
+      return { movSnap, updatedAllocation, updatedCheckingBalance };
     });
 
     // Invalidates both savings and monthly-budget tags
@@ -179,6 +213,12 @@ export async function POST(
           isRecurring: result.updatedAllocation.isRecurring,
           sortOrder: result.updatedAllocation.sortOrder,
         },
+        ...(result.updatedCheckingBalance !== undefined
+          ? {
+              checkingBalance: result.updatedCheckingBalance,
+              checkingBalanceDelta: balanceDelta,
+            }
+          : {}),
       },
       { status: 201 }
     );
