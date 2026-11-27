@@ -690,7 +690,7 @@ export function TransactionsManager({
       {/* Create / Edit Transaction Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs dark:bg-slate-950/70">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+          <div className="max-h-[92vh] w-full max-w-md overflow-x-hidden overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
                 {form.id ? "Editar lançamento" : "Novo lançamento"}
@@ -712,7 +712,7 @@ export function TransactionsManager({
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Classe
                   </label>
@@ -728,7 +728,7 @@ export function TransactionsManager({
                         assetId: "",
                       }));
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="ALL">Todas as classes</option>
                     {availableClasses.map((cls) => (
@@ -739,7 +739,7 @@ export function TransactionsManager({
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Ativo
                   </label>
@@ -759,7 +759,7 @@ export function TransactionsManager({
                         unitPrice: isFixed ? "1" : prev.unitPrice,
                       }));
                     }}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="" disabled>
                       Selecione um ativo...
@@ -775,8 +775,8 @@ export function TransactionsManager({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Tipo
                   </label>
@@ -788,7 +788,7 @@ export function TransactionsManager({
                         type: e.target.value as TransactionTypeKey,
                       })
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   >
                     <option value="BUY">Compra / Aporte</option>
                     <option value="SELL">Venda / Resgate</option>
@@ -796,7 +796,7 @@ export function TransactionsManager({
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Data
                   </label>
@@ -805,7 +805,7 @@ export function TransactionsManager({
                     type="date"
                     value={form.date}
                     onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    className="w-full min-w-0 max-w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:border-emerald-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   />
                 </div>
               </div>
