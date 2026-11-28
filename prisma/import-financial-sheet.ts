@@ -43,6 +43,7 @@ async function main() {
   const email = getArg("--email")?.trim().toLowerCase();
   const savingsCsvPath = getArg("--savings-csv");
   const monthCsvPath = getArg("--month-csv");
+  const monthsDirPath = getArg("--months-dir");
   const year = Number(getArg("--year") ?? "2026");
   const month = Number(getArg("--month") ?? "11");
   const apply = hasFlag("--apply");
@@ -52,8 +53,10 @@ async function main() {
     console.error("Missing required --email argument.");
     process.exit(1);
   }
-  if (!savingsCsvPath && !monthCsvPath) {
-    console.error("Provide at least one of --savings-csv or --month-csv.");
+  if (!savingsCsvPath && !monthCsvPath && !monthsDirPath) {
+    console.error(
+      "Provide at least one of --savings-csv, --month-csv, or --months-dir."
+    );
     process.exit(1);
   }
 
@@ -213,11 +216,37 @@ async function main() {
     }
   }
 
-  // --- 2. Monthly tab ---
+  // --- 2. Monthly tabs (single --month-csv or batch --months-dir) ---
+  const monthTargets: Array<{ csvPath: string; year: number; month: number }> = [];
+  if (monthsDirPath) {
+    const resolvedDir = path.resolve(monthsDirPath);
+    const files = fs
+      .readdirSync(resolvedDir)
+      .filter((f) => /^\d{4}-\d{2}\.csv$/.test(f))
+      .sort();
+    for (const file of files) {
+      const [yStr, mStr] = file.replace(".csv", "").split("-");
+      monthTargets.push({
+        csvPath: path.join(resolvedDir, file),
+        year: Number(yStr),
+        month: Number(mStr),
+      });
+    }
+  }
   if (monthCsvPath) {
-    const resolved = path.resolve(monthCsvPath);
-    const csvText = fs.readFileSync(resolved, "utf-8");
-    const parsed = parseMonthlyBudgetCsv(csvText, year, month);
+    monthTargets.push({
+      csvPath: path.resolve(monthCsvPath),
+      year,
+      month,
+    });
+  }
+
+  let appliedCount = 0;
+  let skippedExistingCount = 0;
+
+  for (const target of monthTargets) {
+    const csvText = fs.readFileSync(target.csvPath, "utf-8");
+    const parsed = parseMonthlyBudgetCsv(csvText, target.year, target.month);
 
     const preview = computeMonthlyBudgetSummary({
       id: "preview",
@@ -225,7 +254,7 @@ async function main() {
       month: parsed.month,
       checkingBalance: parsed.checkingBalance,
       reportDate: `${parsed.reportDate}T12:00:00.000Z`,
-      notes: null,
+      notes: parsed.notes,
       incomes: parsed.incomes.map((i, idx) => ({ id: `i-${idx}`, ...i })),
       expenses: parsed.expenses.map((e, idx) => ({ id: `e-${idx}`, ...e })),
       allocations: parsed.allocations.map((a, idx) => ({
@@ -244,20 +273,28 @@ async function main() {
     });
 
     const existingBudget = await prisma.monthlyBudget.findUnique({
-      where: { userId_year_month: { userId: user.id, year, month } },
+      where: {
+        userId_year_month: {
+          userId: user.id,
+          year: target.year,
+          month: target.month,
+        },
+      },
       select: { id: true },
     });
 
-    console.log(`\n[Monthly Budget ${year}-${String(month).padStart(2, "0")}]`);
+    console.log(
+      `\n[Monthly Budget ${target.year}-${String(target.month).padStart(2, "0")}]`
+    );
     console.log(`  Existing in DB: ${existingBudget ? "YES" : "NO"}`);
     console.log(
-      `  Report date: ${parsed.reportDate} | Checking: R$ ${parsed.checkingBalance.toFixed(2)}`
+      `  Report date: ${parsed.reportDate} | Checking: R$ ${parsed.checkingBalance.toFixed(2)}${parsed.notes ? ` | Notes: ${parsed.notes}` : ""}`
     );
     console.log(
-      `  Incomes: ${parsed.incomes.length} (Total R$ ${preview.totals.totalIncomeBRL.toFixed(2)}, Net R$ ${preview.totals.netIncomeBRL.toFixed(2)})`
+      `  Incomes: ${parsed.incomes.length} (Total R$ ${preview.totals.totalIncomeBRL.toFixed(2)}, Received R$ ${preview.totals.receivedIncomeBRL.toFixed(2)}, Net R$ ${preview.totals.netIncomeBRL.toFixed(2)})`
     );
     console.log(
-      `  Expenses: ${parsed.expenses.length} (Pending R$ ${preview.totals.pendingExpensesBRL.toFixed(2)})`
+      `  Expenses: ${parsed.expenses.length} (Total R$ ${preview.totals.totalExpensesBRL.toFixed(2)}, Paid R$ ${preview.totals.paidExpensesBRL.toFixed(2)}, Pending R$ ${preview.totals.pendingExpensesBRL.toFixed(2)})`
     );
     console.log(
       `  Allocations: ${parsed.allocations.length} (Real Cash R$ ${preview.totals.realAvailableCashBRL.toFixed(2)}, Surplus R$ ${preview.totals.surplusBeforeInvestmentsBRL.toFixed(2)}, Final R$ ${preview.totals.finalSurplusBRL.toFixed(2)})`
@@ -265,6 +302,7 @@ async function main() {
 
     if (apply) {
       if (existingBudget && !replaceMonth) {
+        skippedExistingCount++;
         console.log(
           "  Skipped existing month (pass --replace-month to overwrite)."
         );
@@ -281,6 +319,7 @@ async function main() {
               month: parsed.month,
               checkingBalance: parsed.checkingBalance,
               reportDate: new Date(`${parsed.reportDate}T12:00:00.000Z`),
+              notes: parsed.notes,
             },
           });
 
@@ -323,9 +362,19 @@ async function main() {
           }
         });
 
+        appliedCount++;
         console.log("  Applied monthly budget successfully.");
       }
     }
+  }
+
+  if (monthTargets.length > 1) {
+    console.log(
+      `\nBatch summary: ${monthTargets.length} months scanned` +
+        (apply
+          ? ` | applied: ${appliedCount} | skipped existing: ${skippedExistingCount}`
+          : " (dry-run)")
+    );
   }
 }
 

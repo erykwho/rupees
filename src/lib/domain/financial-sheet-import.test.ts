@@ -104,4 +104,80 @@ describe("financial-sheet-import CSV parsers", () => {
       amount: 2000,
     });
   });
+
+  it("parses Era 1 legacy tabs (2024-09..2025-01) with bare $ balances, Pago checkboxes, and notes", () => {
+    const csv = [
+      "Data do relatório,2024-09-27",
+      "",
+      "Receita,,,Pago,Despesas",
+      'Saldo hoje (27/sep)," $ 5.646,11 ",,FALSE,Aluguel," R$  (6.000,00)"',
+      'Salário dia 30," $ 5.085,84 ",,TRUE,Parcela Apto Mooca," R$  (2.635,00)"',
+      ',,,TRUE,DARF," R$  (1.000,00)"',
+      ',,,FALSE,Cartão de Crédito," R$  (9.623,38)"',
+      'Total Receita," $ 10.731,95 ",,,Total Despesa," R$  (19.258,38)"',
+      'Total," $ (8.526,43)"',
+      'Ação," Vender R$ 10000 em GSUs "',
+    ].join("\n");
+
+    const parsed = parseMonthlyBudgetCsv(csv, 2024, 9);
+    expect(parsed.checkingBalance).toBe(5646.11);
+    expect(parsed.notes).toBe("Vender R$ 10000 em GSUs");
+    expect(parsed.incomes).toEqual([
+      {
+        name: "Salário dia 30",
+        amount: 5085.84,
+        isReceived: false,
+        isRecurring: true,
+        sortOrder: 0,
+      },
+    ]);
+    expect(parsed.expenses).toMatchObject([
+      { name: "Aluguel", category: "BILL", amount: 6000, isPaid: false },
+      { name: "Parcela Apto Mooca", category: "INVESTMENT", amount: 2635, isPaid: true },
+      { name: "DARF", category: "TAX", amount: 1000, isPaid: true },
+      { name: "Cartão de Crédito", category: "VARIABLE", amount: 9623.38, isPaid: false },
+    ]);
+  });
+
+  it("parses Era 2 transitional tab (2025-02) and solves non-greedy received subset + shortened paid names", () => {
+    const feb2025Csv = [
+      "Data do relatório,2025-02-28",
+      "",
+      "Receitas,,,Despesas,,,,,Objetivos e Investimentos,,,Totais",
+      'Conta corrente,"R$ 8.348,35",,Aluguel," Conta "," R$  6.101,93 ","23,76%",,Longo prazo,"R$ 1.000,00",,Total Receita,"R$ 28.203,18"',
+      'Remuneração fim do mês,"R$ 5.054,83",,Compra de celular," Variável ","R$ 4.800,00","18%",,Reserva de Emergência,"R$ 1.000,00",,Total Despesa,"R$ 6.101,93"',
+      'Venda ações fim do mês,"R$ 14.800,00",,,,,,,,,,',
+      ",,,Já pago,,,,,,,,,",
+      ',,,Celular,,"R$ 4.800,00",,,,,,,',
+    ].join("\n");
+
+    const febParsed = parseMonthlyBudgetCsv(feb2025Csv, 2025, 2);
+    expect(febParsed.checkingBalance).toBe(8348.35);
+    expect(febParsed.incomes).toHaveLength(2);
+    expect(febParsed.expenses[1]).toMatchObject({
+      name: "Compra de celular",
+      isPaid: true,
+    });
+
+    // Non-greedy subset-sum test (like june/2026): received = 9415.38 + 23000 + 1000 = 33415.38
+    const juneCsv = [
+      "Data do relatório,2026-06-22,,,,,,,,,,,",
+      'Conta corrente,"R$ 24.009,57",,,,,,,,,,,',
+      "Receitas,,,Despesas,,,,,Objetivos e Investimentos,,,Totais,",
+      'Remuneração meio mes,"R$ 9.415,38",,,,,,,,,,Total Receita,"R$ 64.472,60"',
+      'Remuneração fim do mês,"R$ 6.057,22",,,,,,,,,,Na conta + para receber,"R$ 55.066,79"',
+      'Venda ações fim do mês,"R$ 25.000,00",,,,,,,,,,',
+      'Título de Capitalização,"R$ 23.000,00",,,,,,,,,,',
+      'Reembolso Laura,"R$ 1.000,00",,,,,,,,,,',
+    ].join("\n");
+
+    const juneParsed = parseMonthlyBudgetCsv(juneCsv, 2026, 6);
+    expect(juneParsed.incomes.map((i) => i.isReceived)).toEqual([
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
 });

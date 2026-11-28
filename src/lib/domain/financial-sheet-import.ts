@@ -40,6 +40,7 @@ export interface ParsedMonthlyBudgetSheet {
   month: number;
   reportDate: string; // "YYYY-MM-DD"
   checkingBalance: number;
+  notes: string | null;
   incomes: Array<{
     name: string;
     amount: number;
@@ -120,7 +121,7 @@ export function parseBrMoney(raw: string | undefined | null): number | null {
   const isNegative =
     trimmed.includes("-") || (trimmed.startsWith("(") && trimmed.endsWith(")"));
   const cleaned = trimmed
-    .replace(/R\$/gi, "")
+    .replace(/(?:US|R)?\$/gi, "")
     .replace(/[()%\s-]/g, "")
     .trim();
   if (!cleaned) return null;
@@ -177,6 +178,92 @@ function mapExpenseCategory(raw: string | undefined): MonthlyExpenseCategoryKey 
   if (norm.includes("investimento")) return "INVESTMENT";
   if (norm.includes("imposto")) return "TAX";
   return "BILL";
+}
+
+function inferLegacyExpenseCategory(name: string): MonthlyExpenseCategoryKey {
+  const norm = normalizeText(name);
+  if (norm.includes("darf") || norm.includes("imposto")) return "TAX";
+  if (norm.includes("cartao")) return "VARIABLE";
+  if (
+    norm.includes("mooca") ||
+    norm.includes("aporte") ||
+    norm.includes("previdencia")
+  ) {
+    return "INVESTMENT";
+  }
+  return "BILL";
+}
+
+/**
+ * Finds the subset of positive income indices whose sum matches targetDelta
+ * (within exact tolerance first, or closest small tolerance for manually edited sheets).
+ */
+function findReceivedIncomeSubset(
+  incomes: Array<{ amount: number }>,
+  targetDelta: number
+): number[] {
+  const candidates = incomes
+    .map((inc, idx) => ({ idx, amount: inc.amount }))
+    .filter((c) => c.amount > 0);
+
+  if (candidates.length === 0 || targetDelta <= 0.01) return [];
+
+  if (candidates.length <= 18) {
+    const totalMasks = 1 << candidates.length;
+    let bestExactMask = -1;
+    let bestExactCount = Infinity;
+    let bestApproxMask = -1;
+    let bestApproxDiff = Infinity;
+
+    for (let mask = 1; mask < totalMasks; mask++) {
+      let sum = 0;
+      let count = 0;
+      for (let bit = 0; bit < candidates.length; bit++) {
+        if ((mask & (1 << bit)) !== 0) {
+          sum += candidates[bit].amount;
+          count++;
+        }
+      }
+      const diff = Math.abs(roundMoney(sum) - targetDelta);
+      if (diff <= 0.02) {
+        if (count < bestExactCount) {
+          bestExactCount = count;
+          bestExactMask = mask;
+        }
+      } else if (diff < bestApproxDiff) {
+        bestApproxDiff = diff;
+        bestApproxMask = mask;
+      }
+    }
+
+    const chosenMask =
+      bestExactMask !== -1
+        ? bestExactMask
+        : bestApproxDiff <= Math.max(50, targetDelta * 0.01)
+          ? bestApproxMask
+          : -1;
+
+    if (chosenMask !== -1) {
+      const result: number[] = [];
+      for (let bit = 0; bit < candidates.length; bit++) {
+        if ((chosenMask & (1 << bit)) !== 0) {
+          result.push(candidates[bit].idx);
+        }
+      }
+      return result;
+    }
+  }
+
+  // Fallback greedy match for unusually large income lists
+  let remaining = targetDelta;
+  const result: number[] = [];
+  for (const c of candidates) {
+    if (c.amount <= remaining + 0.01) {
+      result.push(c.idx);
+      remaining = roundMoney(remaining - c.amount);
+    }
+  }
+  return result;
 }
 
 export function parseInvestimentosGeralCsv(
@@ -309,6 +396,95 @@ export function parseInvestimentosGeralCsv(
   };
 }
 
+function parseLegacyMonthlyBudgetRows(
+  rows: string[][],
+  year: number,
+  month: number,
+  reportDate: string
+): ParsedMonthlyBudgetSheet {
+  let checkingBalance = 0;
+  const incomes: ParsedMonthlyBudgetSheet["incomes"] = [];
+  const expenses: ParsedMonthlyBudgetSheet["expenses"] = [];
+  const noteLines: string[] = [];
+
+  // Cols A..B: checking balances ("Saldo hoje*") and pending incomes until "Total Receita"
+  let reachedIncomeTotal = false;
+  let inActions = false;
+  for (let r = 3; r < rows.length; r++) {
+    const colA = (rows[r]?.[0] ?? "").trim();
+    const colB = (rows[r]?.[1] ?? "").trim();
+    const normA = normalizeText(colA);
+
+    if (normA === "acao" || normA === "acoes") {
+      inActions = true;
+      if (colB) noteLines.push(colB);
+      continue;
+    }
+    if (inActions) {
+      if (!colA && colB) noteLines.push(colB);
+      continue;
+    }
+    if (normA === "total receita" || normA === "total") {
+      reachedIncomeTotal = true;
+      continue;
+    }
+    if (reachedIncomeTotal) continue;
+
+    const amount = parseBrMoney(colB);
+    if (!colA || amount === null) continue;
+
+    if (normA.startsWith("saldo hoje") || normA === "conta corrente") {
+      checkingBalance = roundMoney(checkingBalance + Math.abs(amount));
+    } else {
+      const isRecurring =
+        normA.includes("salario") ||
+        normA.includes("remuneracao") ||
+        normA.includes("venda acoes");
+      incomes.push({
+        name: colA,
+        amount: roundMoney(Math.abs(amount)),
+        isReceived: false,
+        isRecurring,
+        sortOrder: incomes.length,
+      });
+    }
+  }
+
+  // Cols D..F: Pago (TRUE/FALSE), Expense Name, Negative Amount until "Total Despesa"
+  for (let r = 3; r < rows.length; r++) {
+    const paidRaw = normalizeText(rows[r]?.[3] ?? "");
+    const name = (rows[r]?.[4] ?? "").trim();
+    const normName = normalizeText(name);
+    if (normName === "total despesa") break;
+    if (!name) continue;
+    if (paidRaw !== "true" && paidRaw !== "false") continue;
+
+    const parsedAmount = parseBrMoney(rows[r]?.[5]);
+    const amount = parsedAmount !== null ? roundMoney(Math.abs(parsedAmount)) : 0;
+
+    expenses.push({
+      name,
+      category: inferLegacyExpenseCategory(name),
+      amount,
+      isUnexpected: false,
+      isPaid: paidRaw === "true",
+      isRecurring: true,
+      sortOrder: expenses.length,
+    });
+  }
+
+  return {
+    year,
+    month,
+    reportDate,
+    checkingBalance,
+    notes: noteLines.length > 0 ? noteLines.join(" · ") : null,
+    incomes,
+    expenses,
+    allocations: [],
+  };
+}
+
 export function parseMonthlyBudgetCsv(
   csvText: string,
   year: number,
@@ -319,7 +495,16 @@ export function parseMonthlyBudgetCsv(
   const reportDate =
     parseSheetDateToIso(rows[0]?.[1]) ??
     `${year}-${String(month).padStart(2, "0")}-01`;
-  const checkingBalance = parseBrMoney(rows[1]?.[1]) ?? 0;
+
+  // Detect Era 1 legacy layout (2024-09..2025-01): Row 2 has "Pago" in col D and "Despesas" in col E
+  if (
+    normalizeText(rows[2]?.[3] ?? "") === "pago" &&
+    normalizeText(rows[2]?.[4] ?? "").startsWith("despesa")
+  ) {
+    return parseLegacyMonthlyBudgetRows(rows, year, month, reportDate);
+  }
+
+  let checkingBalance = parseBrMoney(rows[1]?.[1]) ?? 0;
 
   // Read summary checkpoints from Cols L..M (indices 11..12)
   let cashPlusPendingFromSheet: number | null = null;
@@ -329,7 +514,10 @@ export function parseMonthlyBudgetCsv(
   for (let r = 0; r < rows.length; r++) {
     const label = normalizeText(rows[r]?.[11] ?? "");
     const value = parseBrMoney(rows[r]?.[12]);
-    if (label.includes("na conta + para receber") && value !== null) {
+    if (
+      (label === "na conta" || label.includes("na conta + para receber")) &&
+      value !== null
+    ) {
       cashPlusPendingFromSheet = value;
     } else if (label.includes("para sacar de objetivos") && value !== null) {
       withdrawFromGoalsAmount = Math.max(0, value);
@@ -339,12 +527,19 @@ export function parseMonthlyBudgetCsv(
   }
 
   // 1. Incomes (Cols A..B => indices 0..1, rows >= 3)
+  // Also handles Era 2 (2025-02) where "Conta corrente" sits inside row 3 under Receitas.
   const incomes: ParsedMonthlyBudgetSheet["incomes"] = [];
   for (let r = 3; r < rows.length; r++) {
     const name = (rows[r]?.[0] ?? "").trim();
     const amount = parseBrMoney(rows[r]?.[1]);
     if (!name || amount === null) continue;
     const norm = normalizeText(name);
+    if (norm === "conta corrente") {
+      if (checkingBalance === 0) {
+        checkingBalance = roundMoney(amount);
+      }
+      continue;
+    }
     const isRecurring =
       norm.includes("remuneracao") || norm.includes("venda acoes");
     incomes.push({
@@ -360,15 +555,16 @@ export function parseMonthlyBudgetCsv(
   if (cashPlusPendingFromSheet !== null) {
     const totalIncome = roundMoney(incomes.reduce((s, i) => s + i.amount, 0));
     const expectedIfAllPending = roundMoney(checkingBalance + totalIncome);
-    let alreadyReceivedDelta = roundMoney(
+    const alreadyReceivedDelta = roundMoney(
       expectedIfAllPending - cashPlusPendingFromSheet
     );
     if (alreadyReceivedDelta > 0.01) {
-      for (const inc of incomes) {
-        if (inc.amount > 0 && inc.amount <= alreadyReceivedDelta + 0.01) {
-          inc.isReceived = true;
-          alreadyReceivedDelta = roundMoney(alreadyReceivedDelta - inc.amount);
-        }
+      const receivedIndices = findReceivedIncomeSubset(
+        incomes,
+        alreadyReceivedDelta
+      );
+      for (const idx of receivedIndices) {
+        incomes[idx].isReceived = true;
       }
     }
   }
@@ -376,7 +572,7 @@ export function parseMonthlyBudgetCsv(
   // 2. Expenses (Cols D..F => indices 3..5, rows >= 3)
   const regularExpenses: ParsedMonthlyBudgetSheet["expenses"] = [];
   const unexpectedExpenses: ParsedMonthlyBudgetSheet["expenses"] = [];
-  const paidLookup = new Map<string, number>(); // normName::amount -> count
+  const paidItems: Array<{ normName: string; amount: number }> = [];
 
   let section: "REGULAR" | "UNEXPECTED" | "PAID" = "REGULAR";
   for (let r = 3; r < rows.length; r++) {
@@ -396,8 +592,7 @@ export function parseMonthlyBudgetCsv(
     if (!name || amount === null) continue;
 
     if (section === "PAID") {
-      const key = `${normName}::${roundMoney(amount)}`;
-      paidLookup.set(key, (paidLookup.get(key) ?? 0) + 1);
+      paidItems.push({ normName, amount: roundMoney(Math.abs(amount)) });
       continue;
     }
 
@@ -418,15 +613,38 @@ export function parseMonthlyBudgetCsv(
     }
   }
 
-  const expenses = [...regularExpenses, ...unexpectedExpenses].map((exp, idx) => {
-    const key = `${normalizeText(exp.name)}::${roundMoney(exp.amount)}`;
-    const remaining = paidLookup.get(key) ?? 0;
-    if (remaining > 0) {
-      paidLookup.set(key, remaining - 1);
-      return { ...exp, isPaid: true, sortOrder: idx };
+  const expenses = [...regularExpenses, ...unexpectedExpenses].map((exp, idx) => ({
+    ...exp,
+    sortOrder: idx,
+  }));
+
+  // Pass 1: exact normalized name + exact amount match
+  const unmatchedPaid: Array<{ normName: string; amount: number }> = [];
+  for (const paid of paidItems) {
+    const matchIdx = expenses.findIndex(
+      (exp) =>
+        !exp.isPaid &&
+        normalizeText(exp.name) === paid.normName &&
+        Math.abs(exp.amount - paid.amount) < 0.01
+    );
+    if (matchIdx !== -1) {
+      expenses[matchIdx].isPaid = true;
+    } else {
+      unmatchedPaid.push(paid);
     }
-    return { ...exp, sortOrder: idx };
-  });
+  }
+
+  // Pass 2: shortened/substring name match with exact amount (e.g. "Celular" -> "Compra de celular")
+  for (const paid of unmatchedPaid) {
+    const matchIdx = expenses.findIndex((exp) => {
+      if (exp.isPaid || Math.abs(exp.amount - paid.amount) >= 0.01) return false;
+      const expNorm = normalizeText(exp.name);
+      return expNorm.includes(paid.normName) || paid.normName.includes(expNorm);
+    });
+    if (matchIdx !== -1) {
+      expenses[matchIdx].isPaid = true;
+    }
+  }
 
   // 3. Allocations (Cols I..J => indices 8..9, rows >= 3)
   const allocations: ParsedMonthlyBudgetSheet["allocations"] = [];
@@ -472,6 +690,7 @@ export function parseMonthlyBudgetCsv(
     month,
     reportDate,
     checkingBalance,
+    notes: null,
     incomes,
     expenses,
     allocations,
