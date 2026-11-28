@@ -18,6 +18,8 @@ import {
   parseMonthlyBudgetCsv,
 } from "../src/lib/domain/financial-sheet-import";
 import { computeMonthlyBudgetSummary } from "../src/lib/domain/monthly-budget";
+import type { SavingsMovementTypeKey } from "../src/lib/domain/savings";
+import { planSavingsAuditBackfill } from "../src/lib/domain/savings-audit-backfill";
 
 const prisma = new PrismaClient();
 
@@ -46,6 +48,7 @@ async function main() {
   const monthsDirPath = getArg("--months-dir");
   const year = Number(getArg("--year") ?? "2026");
   const month = Number(getArg("--month") ?? "11");
+  const backfillSavingsEvents = hasFlag("--backfill-savings-events");
   const apply = hasFlag("--apply");
   const replaceMonth = hasFlag("--replace-month");
 
@@ -53,9 +56,14 @@ async function main() {
     console.error("Missing required --email argument.");
     process.exit(1);
   }
-  if (!savingsCsvPath && !monthCsvPath && !monthsDirPath) {
+  if (
+    !savingsCsvPath &&
+    !monthCsvPath &&
+    !monthsDirPath &&
+    !backfillSavingsEvents
+  ) {
     console.error(
-      "Provide at least one of --savings-csv, --month-csv, or --months-dir."
+      "Provide at least one of --savings-csv, --month-csv, --months-dir, or --backfill-savings-events."
     );
     process.exit(1);
   }
@@ -375,6 +383,119 @@ async function main() {
           ? ` | applied: ${appliedCount} | skipped existing: ${skippedExistingCount}`
           : " (dry-run)")
     );
+  }
+
+  // --- 3. Backfill historical SAVINGS_GOAL & SAVINGS_MOVEMENT AuditEvents ---
+  if (backfillSavingsEvents || (savingsCsvPath && apply)) {
+    const [goals, movements, existingEvents] = await Promise.all([
+      prisma.savingsGoal.findMany({
+        where: { userId: user.id },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.savingsMovement.findMany({
+        where: { userId: user.id },
+        include: {
+          goal: { select: { id: true, name: true } },
+          vehicle: { select: { id: true, name: true } },
+        },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+      }),
+      prisma.auditEvent.findMany({
+        where: {
+          userId: user.id,
+          entityType: { in: ["SAVINGS_GOAL", "SAVINGS_MOVEMENT"] },
+          action: "CREATE",
+        },
+        select: { entityType: true, entityId: true },
+      }),
+    ]);
+
+    const existingGoalEventIds = new Set(
+      existingEvents
+        .filter((e) => e.entityType === "SAVINGS_GOAL")
+        .map((e) => e.entityId)
+    );
+    const existingMovementEventIds = new Set(
+      existingEvents
+        .filter((e) => e.entityType === "SAVINGS_MOVEMENT")
+        .map((e) => e.entityId)
+    );
+
+    const plan = planSavingsAuditBackfill({
+      goals: goals.map((g) => ({
+        id: g.id,
+        name: g.name,
+        targetAmount: g.targetAmount !== null ? Number(g.targetAmount) : null,
+        targetDate: g.targetDate,
+        isEmergencyReserve: g.isEmergencyReserve,
+        isClosed: g.isClosed,
+        sortOrder: g.sortOrder,
+        createdAt: g.createdAt,
+      })),
+      movements: movements.map((m) => ({
+        id: m.id,
+        goalId: m.goalId,
+        goalName: m.goal.name,
+        vehicleId: m.vehicleId,
+        vehicleName: m.vehicle.name,
+        date: m.date,
+        type: m.type as SavingsMovementTypeKey,
+        signedAmount: Number(m.signedAmount),
+        transferGroupId: m.transferGroupId ?? null,
+        notes: m.notes ?? null,
+        externalKey: m.externalKey ?? null,
+        createdAt: m.createdAt,
+      })),
+      existingGoalEventIds,
+      existingMovementEventIds,
+    });
+
+    const allPlanned = [...plan.goalEvents, ...plan.movementEvents];
+
+    console.log("\n[Savings AuditEvent Backfill]");
+    console.log(
+      `  SAVINGS_GOAL events to create: ${plan.goalEvents.length} (already audited: ${plan.skippedGoals})`
+    );
+    console.log(
+      `  SAVINGS_MOVEMENT events to create: ${plan.movementEvents.length} (already audited: ${plan.skippedMovements})`
+    );
+    console.log(`  Total AuditEvent rows to create: ${allPlanned.length}`);
+
+    if (plan.goalEvents.length > 0) {
+      console.log("  Goal CREATE dates:");
+      for (const ev of plan.goalEvents) {
+        console.log(
+          `    - ${ev.createdAt.toISOString()} | ${ev.entityLabel}`
+        );
+      }
+    }
+    if (plan.movementEvents.length > 0) {
+      const first = plan.movementEvents[0];
+      const last = plan.movementEvents[plan.movementEvents.length - 1];
+      console.log(
+        `  Movement timeline range: ${first.createdAt.toISOString()} (${first.entityLabel}) -> ${last.createdAt.toISOString()} (${last.entityLabel})`
+      );
+    }
+
+    if (apply && allPlanned.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.auditEvent.createMany({
+          data: allPlanned.map((ev) => ({
+            userId: user.id,
+            entityType: ev.entityType,
+            entityId: ev.entityId,
+            entityLabel: ev.entityLabel,
+            action: ev.action,
+            beforeState: Prisma.DbNull,
+            afterState: ev.afterState as unknown as Prisma.InputJsonValue,
+            createdAt: ev.createdAt,
+          })),
+        });
+      });
+      console.log(
+        `  Applied ${allPlanned.length} savings AuditEvent(s) successfully.`
+      );
+    }
   }
 }
 
